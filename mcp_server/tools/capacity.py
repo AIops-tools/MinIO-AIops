@@ -25,9 +25,13 @@ def capacity_rca(target: Optional[str] = None) -> dict:
 
 @mcp.tool()
 @governed_tool(risk_level="low")
-@tool_errors("list")
-def usage_by_bucket(limit: int = 25, target: Optional[str] = None) -> list:
-    """[READ] Per-bucket usage (bytes + objects), biggest first.
+@tool_errors("dict")
+def usage_by_bucket(limit: int = 25, target: Optional[str] = None) -> dict:
+    """[READ] Per-bucket usage (bytes + objects), biggest first, in an envelope.
+
+    Returns {"buckets": [...], "returned": N, "limit": L, "truncated": bool}.
+    When "truncated" is true, buckets outside the top `limit` were not shown —
+    do not present the list as the deployment's complete usage breakdown.
 
     Args:
         limit: Maximum rows to return (default 25).

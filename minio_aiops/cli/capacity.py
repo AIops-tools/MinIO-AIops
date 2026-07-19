@@ -7,7 +7,13 @@ from typing import Annotated
 
 import typer
 
-from minio_aiops.cli._common import TargetOption, cli_errors, console, get_connection
+from minio_aiops.cli._common import (
+    TargetOption,
+    cli_errors,
+    console,
+    get_connection,
+    truncation_note,
+)
 
 capacity_app = typer.Typer(
     name="capacity",
@@ -36,4 +42,6 @@ def capacity_usage(
     from minio_aiops.ops import capacity as ops
 
     conn, _ = get_connection(target)
-    console.print_json(json.dumps(ops.usage_by_bucket(conn, limit=limit)))
+    result = ops.usage_by_bucket(conn, limit=limit)
+    console.print_json(json.dumps(result))
+    truncation_note(result)

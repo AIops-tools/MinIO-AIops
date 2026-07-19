@@ -22,6 +22,10 @@ NEARFULL_RATIO = 0.85  # usable capacity used — warn: plan expansion/cleanup
 FULL_RATIO = 0.95  # usable capacity used — critical: writes at risk
 DRIVE_NEARFULL_RATIO = 0.90  # single drive used — hotspot
 IMBALANCE_SPREAD = 0.25  # max-min drive usage ratio — rebalance hint
+# The RCA carries only the fullest drives inline; the count is reported next to
+# them (drivesTotal/drivesTruncated) so a big cluster's tail is not silently
+# dropped. Use drive_status for the complete per-drive list.
+DRIVE_ROWS_SHOWN = 24
 
 M_DRIVE_USED = "minio_node_drive_used_bytes"
 M_DRIVE_TOTAL = "minio_node_drive_total_bytes"
@@ -171,20 +175,33 @@ def capacity_rca(conn: Any) -> dict:
         "usedRatio": used_ratio,
         "drivesOffline": int(drives_offline),
         "nodesOffline": int(nodes_offline),
-        "drives": drives[:24],
+        "drives": drives[:DRIVE_ROWS_SHOWN],
+        "drivesReturned": min(len(drives), DRIVE_ROWS_SHOWN),
+        "drivesTotal": len(drives),
+        "drivesTruncated": len(drives) > DRIVE_ROWS_SHOWN,
         "findings": findings,
     }
 
 
-def usage_by_bucket(conn: Any, limit: int = 25) -> list[dict]:
-    """[READ] Per-bucket usage (bytes + objects), biggest first.
+def usage_by_bucket(conn: Any, limit: int = 25) -> dict:
+    """[READ] Per-bucket usage (bytes + objects), biggest first, in an envelope.
 
-    Resilient by design: a failing metrics scrape returns an empty list.
+    Returns::
+
+        {"buckets": [...], "returned": N, "limit": L, "truncated": true/false}
+
+    so a cut-off "who is using the space" answer says so rather than looking
+    complete. The metrics scrape returns every bucket at once, so ``truncated``
+    is measured against the full row count before slicing — never guessed from
+    the returned count equalling the limit.
+
+    Resilient by design: a failing metrics scrape returns an empty envelope.
     """
+    requested = max(1, int(limit))
     try:
         metrics = conn.metrics()
     except Exception:  # noqa: BLE001 — a usage probe must survive a broken scrape
-        return []
+        return {"buckets": [], "returned": 0, "limit": requested, "truncated": False}
     usage = by_label(metrics, M_BUCKET_USAGE, "bucket")
     objects = by_label(metrics, M_BUCKET_OBJECTS, "bucket")
     rows = [
@@ -192,4 +209,11 @@ def usage_by_bucket(conn: Any, limit: int = 25) -> list[dict]:
         for name, val in usage.items()
     ]
     rows.sort(key=lambda r: -(r["usedBytes"] or 0))
-    return rows[:limit]
+    truncated = len(rows) > requested
+    kept = rows[:requested]
+    return {
+        "buckets": kept,
+        "returned": len(kept),
+        "limit": requested,
+        "truncated": truncated,
+    }

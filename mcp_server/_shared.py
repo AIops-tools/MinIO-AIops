@@ -75,7 +75,7 @@ def tool_errors(shape: str = "dict") -> Callable:
 mcp = FastMCP(
     "minio-aiops",
     instructions=(
-        "MinIO object-storage operations (preview) over the S3 + admin + metrics "
+        "MinIO object-storage operations over the S3 + admin + metrics "
         "APIs. Four flagship analyses turn raw state into cause + suggested "
         "action: 'capacity_rca' (capacity vs used, offline drives/nodes, "
         "hotspots), 'bucket_exposure_audit' (public/anonymous policies, missing "

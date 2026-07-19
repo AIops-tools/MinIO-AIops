@@ -161,15 +161,24 @@ def audit_bucket(conn: Any, bucket: str) -> dict:
 
 
 def bucket_exposure_audit(conn: Any, limit: int = 100) -> dict:
-    """[READ] Ranked exposure findings across all buckets (riskiest first)."""
+    """[READ] Ranked exposure findings across all buckets (riskiest first).
+
+    ``truncated`` is measured against the deployment's full bucket count, not
+    guessed: an audit that only looked at the first ``limit`` buckets must not
+    read as "these are all the exposed buckets".
+    """
+    requested = max(1, int(limit))
     try:
-        buckets = conn.list_buckets()
+        buckets = list(conn.list_buckets())
     except Exception as exc:  # noqa: BLE001 — an audit must survive a broken target
         return {"error": s(exc, 200)}
-    rows = [audit_bucket(conn, b["name"]) for b in buckets[:limit]]
+    rows = [audit_bucket(conn, b["name"]) for b in buckets[:requested]]
     rows.sort(key=lambda r: -r["riskScore"])
     return {
         "bucketsAudited": len(rows),
+        "bucketsTotal": len(buckets),
+        "limit": requested,
+        "truncated": len(buckets) > requested,
         "atRisk": sum(1 for r in rows if r["riskScore"] > 0),
         "highRisk": sum(1 for r in rows if r["riskLevel"] == "high"),
         "findings": [r for r in rows if r["riskScore"] > 0],

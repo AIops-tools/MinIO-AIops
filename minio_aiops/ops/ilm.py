@@ -50,8 +50,9 @@ def _rules_have(rules: list[dict] | None, key: str) -> bool:
 
 def lifecycle_gap_analysis(conn: Any, limit: int = 100) -> dict:
     """[READ] ILM gaps per bucket: what accumulates, why, and the fix."""
+    requested = max(1, int(limit))
     try:
-        buckets = conn.list_buckets()
+        buckets = list(conn.list_buckets())
     except Exception as exc:  # noqa: BLE001 — an analysis must survive a broken target
         return {"error": s(exc, 200)}
     try:
@@ -65,7 +66,7 @@ def lifecycle_gap_analysis(conn: Any, limit: int = 100) -> dict:
 
     findings: list[dict] = []
     total_reclaimable = 0.0
-    for bucket_row in buckets[:limit]:
+    for bucket_row in buckets[:requested]:
         name = bucket_row["name"]
         gaps: list[dict] = []
         errors: list[str] = []
@@ -184,7 +185,10 @@ def lifecycle_gap_analysis(conn: Any, limit: int = 100) -> dict:
 
     findings.sort(key=lambda r: -(r.get("usedBytes") or 0))
     return {
-        "bucketsAnalyzed": min(len(buckets), limit),
+        "bucketsAnalyzed": min(len(buckets), requested),
+        "bucketsTotal": len(buckets),
+        "limit": requested,
+        "truncated": len(buckets) > requested,
         "bucketsWithGaps": len(findings),
         "totalReclaimableEstimateBytes": int(total_reclaimable),
         "note": "Reclaimable bytes are estimated from version/object counts, not an exact scan.",

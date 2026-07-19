@@ -102,7 +102,12 @@ def test_bucket_ls_output_shape(patch_conn):
     result = runner.invoke(app, ["bucket", "ls"])
     assert result.exit_code == 0
     data = json.loads(result.output)
-    assert data == [{"bucket": "data", "createdAt": "2026-01-01T00:00:00"}]
+    assert data == {
+        "buckets": [{"bucket": "data", "createdAt": "2026-01-01T00:00:00"}],
+        "returned": 1,
+        "limit": 500,
+        "truncated": False,
+    }
 
 
 def test_health_check_reports_healthy(patch_conn):

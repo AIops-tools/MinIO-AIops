@@ -1,7 +1,8 @@
 # minio-aiops setup & security guide
 
-> Preview / mock-only — not yet validated against a live MinIO server. The
-> cheapest live check is a single-node server running `minio-aiops doctor`.
+> Verification status: mock-validated; no recorded end-to-end run against a
+> live MinIO server yet. The cheapest live check is a single-node server
+> running `minio-aiops doctor` — see `docs/VERIFICATION.md`.
 
 ## 1. Install
 

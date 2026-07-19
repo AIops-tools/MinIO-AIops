@@ -1,6 +1,6 @@
 # minio-aiops capabilities
 
-> Preview / mock-only. 29 MCP tools (21 read, 8 write) over four access paths:
+> 31 MCP tools (21 read, 8 write, 2 undo) over four access paths:
 > the **S3 API** (official SDK, SigV4), the **admin API**, the unauthenticated
 > **health endpoints**, and the **cluster metrics endpoint**.
 
@@ -19,25 +19,25 @@
 | Tool | Surface | Returns |
 |------|---------|---------|
 | `capacity_rca` | metrics endpoint | findings with **cause + suggestedAction**: CLUSTER_FULL / CLUSTER_NEARFULL / DRIVES_OFFLINE / NODES_OFFLINE / DRIVE_HOTSPOT / DRIVE_IMBALANCE; per-drive usage table |
-| `usage_by_bucket` | metrics endpoint | per-bucket bytes + objects, biggest first |
+| `usage_by_bucket` | metrics endpoint | envelope `{buckets, returned, limit, truncated}` — per-bucket bytes + objects, biggest first |
 | `healing_health` | metrics endpoint | per-erasure-set online drives / write quorum / **failureToleranceRemaining**, healing drives, heal backlog + errors; findings WRITE_QUORUM_LOST / _AT_EDGE / LOW_FAILURE_TOLERANCE / HEALING_IN_PROGRESS / HEAL_ERRORS |
 | `drive_status` | metrics endpoint | per-drive rows (server, drive, used ratio), fullest first |
 | `node_status` | metrics endpoint | nodes online/offline + per-node drive counts |
-| `bucket_exposure_audit` | S3 API per bucket | **ranked** findings: PUBLIC_WRITE_POLICY / PUBLIC_READ_POLICY / NO_DEFAULT_ENCRYPTION / VERSIONING_OFF / NO_LIFECYCLE with riskScore + riskLevel |
-| `lifecycle_gap_analysis` | S3 API + metrics | gaps: NONCURRENT_VERSIONS_UNBOUNDED (+reclaimable estimate) / INCOMPLETE_UPLOADS_NO_ABORT_RULE (+counts, ages) / NO_LIFECYCLE_ON_LARGE_BUCKET |
+| `bucket_exposure_audit` | S3 API per bucket | reports `bucketsAudited`/`bucketsTotal`/`truncated`; **ranked** findings: PUBLIC_WRITE_POLICY / PUBLIC_READ_POLICY / NO_DEFAULT_ENCRYPTION / VERSIONING_OFF / NO_LIFECYCLE with riskScore + riskLevel |
+| `lifecycle_gap_analysis` | S3 API + metrics | reports `bucketsAnalyzed`/`bucketsTotal`/`truncated`; gaps: NONCURRENT_VERSIONS_UNBOUNDED (+reclaimable estimate) / INCOMPLETE_UPLOADS_NO_ABORT_RULE (+counts, ages) / NO_LIFECYCLE_ON_LARGE_BUCKET |
 
 ## Buckets (read)
 
 | Tool | Surface | Returns |
 |------|---------|---------|
-| `bucket_ls` | `ListBuckets` | name + creation time |
+| `bucket_ls` | `ListBuckets` | envelope `{buckets, returned, limit, truncated}` — name + creation time (`createdAt` is `null`, not `""`, when absent) |
 | `bucket_info` | composite per bucket | policy (present/publicRead/publicWrite), versioning, lifecycle rules, encryption, quota, tags — per-probe failures degrade to an `errors` list |
 | `bucket_policy_get` | `GetBucketPolicy` | verbatim policy JSON + anonymous-access summary |
 | `bucket_lifecycle_get` | `GetBucketLifecycle` | rules as dicts (ruleId, status, prefix, expirationDays, noncurrentExpirationDays, abortIncompleteDays) |
 | `bucket_versioning_get` | `GetBucketVersioning` | Enabled / Suspended / Off |
 | `bucket_quota_get` | admin API | hard quota bytes (0 = unlimited) |
-| `object_ls` | `ListObjectsV2` | bounded listing (default 100, max 1000) under a prefix |
-| `incomplete_uploads_ls` | `ListMultipartUploads` | object, uploadId, initiated time |
+| `object_ls` | `ListObjectsV2` | envelope `{objects, returned, limit, truncated}` — bounded listing (default 100, max 1000) under a prefix; `truncated` is **measured** (one row over-fetched); `lastModified`/`versionId` are `null` when absent |
+| `incomplete_uploads_ls` | `ListMultipartUploads` | envelope `{uploads, returned, limit, truncated}` — object, uploadId, initiated time (`null` when absent) |
 | `server_info` | admin API | mode, deployment id, server/pool counts |
 
 ## Writes (governed; all take `dry_run`)
@@ -61,3 +61,10 @@
 - Tiering to remote storage
 
 Missing something you need? **Open an issue or send a PR** — feedback welcome.
+
+## Read-only mode
+
+Set `MINIO_READ_ONLY=1` and every tool in the **Writes** table above is
+**unregistered** — it never appears in `list_tools()`. The `@governed_tool`
+harness independently refuses any non-`low`-risk call, so CLI and in-process
+callers are covered too. See `agent-guardrails.md`.

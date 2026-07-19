@@ -1,39 +1,48 @@
-# MinIO AIops v0.1.0 — preview
+# Release notes — minio-aiops 0.2.0
 
-Governed AI-ops for **MinIO** object storage for AI agents (MCP) and humans
-(CLI), with a bundled governance harness: audit, policy, token/runaway budget,
-undo recording, graduated risk tiers.
+Previous release: 0.1.0.
 
-> **Preview**: behaviour is validated against mocked SDK/HTTP responses; it
-> has not been run against a live MinIO server. The fastest live check is a
-> single-node server running `minio-aiops doctor`.
+## Headline: read-only mode
 
-## Surface
+```bash
+export MINIO_READ_ONLY=1
+```
 
-- **29 MCP tools** (21 read, 8 write) over four access paths: S3 API (official
-  SDK), admin API (quota, server info), unauthenticated health endpoints, and
-  the cluster metrics endpoint (public or bearer-token auth — the token is
-  derived from the stored credentials).
-- **Flagship analyses**: `capacity_rca`, `bucket_exposure_audit`,
-  `lifecycle_gap_analysis`, `healing_health` — every finding is
-  cause + suggested action, thresholds are named constants.
-- **Guarded writes**: policy / versioning / lifecycle / quota (reversible,
-  prior state captured, undo recorded), `bucket_delete` (high risk, empty-only,
-  irreversible), `remove_incomplete_uploads` (age-gated purge, priorState
-  only). All writes take `dry_run`; destructive CLI commands double-confirm.
+With this set the **9 write tools are never registered** — an MCP
+client lists **22 tools instead of 31**. The writes are not hidden
+behind a flag and not merely refused on call: they are absent from the session,
+so a model cannot invoke one and cannot be argued into one. For a reviewer this
+is checkable rather than promised — connect, list the tools, and the writes are
+not there.
 
-## Governance
+Enforcement is two layers deep: the `@governed_tool` harness refuses every
+non-read operation (covering the CLI and in-process callers too), and the MCP
+server removes write tools from `list_tools()`. Changing entry point does not
+get around it.
 
-- Unified audit log `~/.minio-aiops/audit.db` (relocatable via
-  `MINIO_AIOPS_HOME`); CLI writes route through the same governed functions.
-- Secure by default: with no `rules.yaml`, high-risk writes require a named
-  approver (`MINIO_AUDIT_APPROVED_BY`); `init` seeds an explicit starter
-  policy.
-- Encrypted secret store (`secrets.enc`, Fernet + scrypt) — no plaintext
-  secrets on disk.
+## BREAKING — return shapes changed
 
-## Quality gates (this release)
+This release changes payloads that callers may be parsing. Both changes exist
+to stop a result from misrepresenting itself:
 
-- 114 tests green (pytest), `ruff check` clean, bandit 0 Medium+ findings.
-- Every MCP tool carries the `_is_governed_tool` marker.
-- Undo descriptors are replay-tested against the target tool signatures.
+1. **Absent fields are now `null`, not `""`.** A missing value and an empty value
+   were previously indistinguishable, which invited consumers to invent the
+   difference. Keys are still always present — only the value may be null.
+2. **Anything with a `limit` now returns an envelope** —
+   `{"<items>": [...], "returned": N, "limit": L, "truncated": bool}`. Truncation is
+   *measured* (one extra row is fetched), never inferred from the page happening to
+   be full. Where a genuine pre-cap total is knowable it is reported as `total`;
+   where it isn't, `total` is deliberately omitted rather than echoing `returned`.
+
+## Also in this release
+
+- **`docs/VERIFICATION.md`** — what the mock suite actually guarantees, a live
+  verification checklist, and the criteria for claiming this tool verified.
+- **`skills/minio-aiops/references/agent-guardrails.md`** — for driving this tool with a
+  smaller / local model: which guardrails are now enforced for you, and a
+  ready-made system prompt for the rest.
+- Expanded operator playbooks in the skill documentation.
+- The advertised tool count now matches what an MCP client actually lists
+  (it includes `undo_list` / `undo_apply`), and a release gate keeps it honest.
+- The `(preview)` label has been dropped. It never meant unreleased; verification
+  status now lives in `docs/VERIFICATION.md` where it can be specific.

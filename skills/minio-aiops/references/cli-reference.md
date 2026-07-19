@@ -1,6 +1,6 @@
 # minio-aiops CLI reference
 
-> The CLI is a convenience subset; the full 29-tool surface is via the MCP
+> The CLI is a convenience subset; the full 31-tool surface is via the MCP
 > server (`minio-aiops mcp`). CLI writes delegate to the governed MCP twins,
 > so they are audited + undo-recorded identically.
 
@@ -33,10 +33,11 @@ minio-aiops capacity usage          # per-bucket usage, biggest first
 minio-aiops heal status             # flagship: erasure-set quorum risk + heal backlog
 minio-aiops heal drives             # per-drive usage, fullest first
 minio-aiops heal nodes              # per-node drive counts
-minio-aiops bucket ls
+minio-aiops bucket ls                # --limit caps the listing
 minio-aiops bucket info <bucket>    # policy/versioning/lifecycle/encryption/quota/tags
 minio-aiops bucket audit            # flagship: ranked exposure findings
 minio-aiops bucket ilm-gap          # flagship: ILM gaps + reclaimable estimate
+minio-aiops bucket objects <bucket> # objects under a prefix (--prefix, --limit)
 minio-aiops bucket uploads <bucket> # incomplete multipart uploads
 ```
 
@@ -60,3 +61,15 @@ minio-aiops mcp                          # or: minio-aiops-mcp
 
 Common options: `--target/-t <name>` selects a configured target (default: the
 first one); `--dry-run` previews a write without executing.
+
+## Read-only mode
+
+```bash
+export MINIO_READ_ONLY=1     # every write is refused; MCP write tools are not registered
+```
+
+Listing commands (`bucket ls`, `bucket objects`, `bucket uploads`,
+`capacity usage`, `bucket audit`, `bucket ilm-gap`) return a
+`{..., "returned": N, "limit": L, "truncated": bool}` envelope and print a
+trailing `… truncated` note when there is more data — re-run with a higher
+`--limit` rather than treating the output as complete.

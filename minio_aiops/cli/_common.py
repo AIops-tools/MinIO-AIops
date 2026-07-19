@@ -74,6 +74,21 @@ def dry_run_print(*, operation: str, api_call: str, parameters: dict | None = No
     console.print("[magenta]  Run without --dry-run to execute.[/]\n")
 
 
+def truncation_note(result: dict, option: str = "--limit") -> None:
+    """Print a trailing warning when a result envelope says it was cut off.
+
+    The envelope already carries ``truncated``; a human scanning JSON output
+    should not have to spot the flag among the rows. No-op when the result is
+    complete (or is not an envelope at all).
+    """
+    if isinstance(result, dict) and result.get("truncated"):
+        shown = result.get("returned")
+        console.print(
+            f"[yellow]… truncated at {shown} row(s) — there is more data. "
+            f"Re-run with a higher {option}.[/]"
+        )
+
+
 def double_confirm(action: str, resource: str) -> None:
     """Require two confirmations for a destructive operation."""
     console.print(f"[bold yellow]⚠️  About to: {action} '{resource}'[/]")

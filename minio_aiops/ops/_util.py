@@ -12,7 +12,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from minio_aiops.governance import sanitize
+from minio_aiops.governance import opt_str, sanitize
 
 # S3 bucket naming rules (the strict, portable subset): 3-63 chars, lowercase
 # letters / digits / dots / hyphens, starts+ends alphanumeric, no "..".
@@ -40,6 +40,17 @@ def check_bucket_name(name: Any) -> str:
 def s(value: Any, limit: int = 256) -> str:
     """Sanitize an arbitrary value to a bounded, injection-safe string."""
     return sanitize(str(value if value is not None else ""), limit)
+
+
+def opt_s(value: Any, limit: int = 256) -> str | None:
+    """Sanitize an OPTIONAL API field, preserving the difference absent/empty.
+
+    ``s()`` folds a missing value into ``""``, which downstream reads as "the
+    field exists and is empty". For a field the API may simply not return
+    (a bucket with no creation date, an upload with no initiated time) that is
+    a fabricated fact. This returns ``None`` — JSON ``null`` — instead.
+    """
+    return opt_str(value, limit)
 
 
 def bytes_h(n: Any) -> str:

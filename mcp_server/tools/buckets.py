@@ -9,14 +9,19 @@ from minio_aiops.ops import buckets as ops
 
 @mcp.tool()
 @governed_tool(risk_level="low")
-@tool_errors("list")
-def bucket_ls(target: Optional[str] = None) -> list:
-    """[READ] All buckets: name + creation time.
+@tool_errors("dict")
+def bucket_ls(limit: int = 500, target: Optional[str] = None) -> dict:
+    """[READ] Buckets (name + creation time) in a truncation-aware envelope.
+
+    Returns {"buckets": [...], "returned": N, "limit": L, "truncated": bool}.
+    When "truncated" is true there are MORE buckets than shown — re-run with a
+    higher limit rather than reporting the list as complete.
 
     Args:
+        limit: Maximum buckets to return (default 500).
         target: MinIO target name from config; omit for the default.
     """
-    return ops.list_buckets(_get_connection(target))
+    return ops.list_buckets(_get_connection(target), limit=limit)
 
 
 @mcp.tool()
@@ -86,11 +91,17 @@ def bucket_quota_get(bucket_name: str, target: Optional[str] = None) -> dict:
 
 @mcp.tool()
 @governed_tool(risk_level="low")
-@tool_errors("list")
+@tool_errors("dict")
 def object_ls(
     bucket_name: str, prefix: str = "", limit: int = 100, target: Optional[str] = None
-) -> list:
-    """[READ] First `limit` objects under `prefix` (bounded listing, never a full walk).
+) -> dict:
+    """[READ] Objects under `prefix` in a truncation-aware envelope (never a full walk).
+
+    Returns {"objects": [...], "returned": N, "limit": L, "truncated": bool}.
+    A bucket can hold millions of keys, so "truncated" being true is the normal
+    case — say so and re-run with a higher limit or a narrower prefix instead
+    of treating the page as the whole bucket. "lastModified" and "versionId"
+    are null when the source had no value.
 
     Args:
         bucket_name: Bucket name (from bucket_ls).
@@ -103,18 +114,25 @@ def object_ls(
 
 @mcp.tool()
 @governed_tool(risk_level="low")
-@tool_errors("list")
+@tool_errors("dict")
 def incomplete_uploads_ls(
-    bucket_name: str, prefix: str = "", target: Optional[str] = None
-) -> list:
-    """[READ] In-flight/abandoned multipart uploads: object, uploadId, initiated time.
+    bucket_name: str, prefix: str = "", limit: int = 200, target: Optional[str] = None
+) -> dict:
+    """[READ] In-flight/abandoned multipart uploads in a truncation-aware envelope.
+
+    Returns {"uploads": [...], "returned": N, "limit": L, "truncated": bool}.
+    Each row: objectName, uploadId, initiated time (null when the source gave
+    none). When "truncated" is true, re-run with a higher limit.
 
     Args:
         bucket_name: Bucket name (from bucket_ls).
         prefix: Key prefix filter; empty for the whole bucket.
+        limit: Maximum uploads to return (default 200).
         target: MinIO target name from config; omit for the default.
     """
-    return ops.list_incomplete_uploads(_get_connection(target), bucket_name, prefix=prefix)
+    return ops.list_incomplete_uploads(
+        _get_connection(target), bucket_name, prefix=prefix, limit=limit
+    )
 
 
 @mcp.tool()

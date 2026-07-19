@@ -21,6 +21,7 @@ from minio_aiops.cli._common import (
     double_confirm,
     dry_run_print,
     get_connection,
+    truncation_note,
 )
 
 bucket_app = typer.Typer(
@@ -38,12 +39,17 @@ BucketArg = Annotated[str, typer.Argument(help="Bucket name (from 'bucket ls')")
 
 @bucket_app.command("ls")
 @cli_errors
-def bucket_ls(target: TargetOption = None) -> None:
-    """List buckets (name + creation time)."""
+def bucket_ls(
+    limit: Annotated[int, typer.Option("--limit", help="Max buckets to list")] = 500,
+    target: TargetOption = None,
+) -> None:
+    """List buckets (name + creation time); says so when the list was cut off."""
     from minio_aiops.ops import buckets as ops
 
     conn, _ = get_connection(target)
-    console.print_json(json.dumps(ops.list_buckets(conn)))
+    result = ops.list_buckets(conn, limit=limit)
+    console.print_json(json.dumps(result))
+    truncation_note(result)
 
 
 @bucket_app.command("info")
@@ -58,32 +64,65 @@ def bucket_info(bucket: BucketArg, target: TargetOption = None) -> None:
 
 @bucket_app.command("audit")
 @cli_errors
-def bucket_audit(target: TargetOption = None) -> None:
+def bucket_audit(
+    limit: Annotated[int, typer.Option("--limit", help="Max buckets to audit")] = 100,
+    target: TargetOption = None,
+) -> None:
     """Ranked bucket-exposure findings (riskiest first)."""
     from minio_aiops.ops import exposure as ops
 
     conn, _ = get_connection(target)
-    console.print_json(json.dumps(ops.bucket_exposure_audit(conn)))
+    result = ops.bucket_exposure_audit(conn, limit=limit)
+    console.print_json(json.dumps(result))
+    truncation_note(result)
 
 
 @bucket_app.command("ilm-gap")
 @cli_errors
-def bucket_ilm_gap(target: TargetOption = None) -> None:
+def bucket_ilm_gap(
+    limit: Annotated[int, typer.Option("--limit", help="Max buckets to analyze")] = 100,
+    target: TargetOption = None,
+) -> None:
     """Lifecycle/ILM gap analysis with a reclaimable estimate."""
     from minio_aiops.ops import ilm as ops
 
     conn, _ = get_connection(target)
-    console.print_json(json.dumps(ops.lifecycle_gap_analysis(conn)))
+    result = ops.lifecycle_gap_analysis(conn, limit=limit)
+    console.print_json(json.dumps(result))
+    truncation_note(result)
 
 
 @bucket_app.command("uploads")
 @cli_errors
-def bucket_uploads(bucket: BucketArg, target: TargetOption = None) -> None:
+def bucket_uploads(
+    bucket: BucketArg,
+    limit: Annotated[int, typer.Option("--limit", help="Max uploads to list")] = 200,
+    target: TargetOption = None,
+) -> None:
     """List incomplete multipart uploads for a bucket."""
     from minio_aiops.ops import buckets as ops
 
     conn, _ = get_connection(target)
-    console.print_json(json.dumps(ops.list_incomplete_uploads(conn, bucket)))
+    result = ops.list_incomplete_uploads(conn, bucket, limit=limit)
+    console.print_json(json.dumps(result))
+    truncation_note(result)
+
+
+@bucket_app.command("objects")
+@cli_errors
+def bucket_objects(
+    bucket: BucketArg,
+    prefix: Annotated[str, typer.Option("--prefix", help="Key prefix filter")] = "",
+    limit: Annotated[int, typer.Option("--limit", help="Max objects (max 1000)")] = 100,
+    target: TargetOption = None,
+) -> None:
+    """List objects in a bucket (bounded); says so when the page was cut off."""
+    from minio_aiops.ops import buckets as ops
+
+    conn, _ = get_connection(target)
+    result = ops.list_objects(conn, bucket, prefix=prefix, limit=limit)
+    console.print_json(json.dumps(result))
+    truncation_note(result)
 
 
 # ── writes (delegated to the governed twins) ─────────────────────────────

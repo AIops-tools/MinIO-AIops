@@ -79,12 +79,20 @@ def test_thresholds_are_named_constants():
 
 def test_usage_by_bucket_sorted_and_limited():
     conn = _conn(_metrics(bucket_usage={"small": 10.0, "big": 999.0, "mid": 100.0}))
-    rows = ops.usage_by_bucket(conn, limit=2)
-    assert [r["bucket"] for r in rows] == ["big", "mid"]
-    assert rows[0]["objects"] == 10.0
+    result = ops.usage_by_bucket(conn, limit=2)
+    assert [r["bucket"] for r in result["buckets"]] == ["big", "mid"]
+    assert result["returned"] == 2
+    assert result["limit"] == 2
+    assert result["truncated"] is True
+    assert result["buckets"][0]["objects"] == 10.0
 
 
 def test_usage_by_bucket_resilient():
     conn = MagicMock(name="conn")
     conn.metrics.side_effect = RuntimeError("scrape down")
-    assert ops.usage_by_bucket(conn) == []
+    assert ops.usage_by_bucket(conn) == {
+        "buckets": [],
+        "returned": 0,
+        "limit": 25,
+        "truncated": False,
+    }

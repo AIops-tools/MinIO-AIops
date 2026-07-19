@@ -23,9 +23,12 @@ def test_check_bucket_name_accepts_valid_and_rejects_hostile():
 def test_list_buckets_normalizes():
     conn = MagicMock(name="conn")
     conn.list_buckets.return_value = [{"name": "alpha", "createdAt": "2026-01-01T00:00:00"}]
-    assert ops.list_buckets(conn) == [
-        {"bucket": "alpha", "createdAt": "2026-01-01T00:00:00"}
-    ]
+    assert ops.list_buckets(conn) == {
+        "buckets": [{"bucket": "alpha", "createdAt": "2026-01-01T00:00:00"}],
+        "returned": 1,
+        "limit": 500,
+        "truncated": False,
+    }
 
 
 def test_bucket_info_folds_all_probes():
@@ -75,7 +78,8 @@ def test_list_objects_clamps_limit():
     conn.list_objects_page.return_value = []
     ops.list_objects(conn, "data-bkt", limit=99999)
     _, kwargs = conn.list_objects_page.call_args
-    assert kwargs["limit"] == 1000
+    # clamped to the 1000 ceiling, then +1 so truncation can be MEASURED
+    assert kwargs["limit"] == 1001
 
 
 def test_server_info_summary():

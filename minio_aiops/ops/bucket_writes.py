@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from minio_aiops.ops._util import check_bucket_name, s
+from minio_aiops.ops._util import check_bucket_name, opt_s, s
 from minio_aiops.ops.ilm import _age_days
 
 VERSIONING_STATES = ("Enabled", "Suspended")
@@ -205,7 +205,10 @@ def remove_incomplete_uploads(
             "incompleteUploads": len(uploads),
             "matchedForPurge": len(victims),
             "sample": [
-                {"objectName": s(u.get("objectName"), 120), "initiated": s(u.get("initiated"))}
+                {
+                    "objectName": opt_s(u.get("objectName"), 120),
+                    "initiated": opt_s(u.get("initiated")),
+                }
                 for u in victims[:20]
             ],
         },
