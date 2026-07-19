@@ -203,13 +203,15 @@ Every MCP tool passes through the bundled `@governed_tool` harness:
 - **Incomplete-upload listing** uses the SDK's core ListMultipartUploads call
   (the public alias was removed from the SDK); it is exercised in tests and
   documented in `connection.py`.
-- **Verification status.** Behaviour is validated against mocked SDK/HTTP
-  responses; there is no recorded end-to-end run against a live MinIO server
-  yet. The cheapest **live** check is a single-node MinIO server (a container
-  or the bare binary with a data directory) running `minio-aiops doctor`.
-  Erasure-set/healing findings need a multi-drive deployment to observe for
-  real. See [`docs/VERIFICATION.md`](docs/VERIFICATION.md) for the full
-  checklist.
+- **Verification status.** **Live-verified against a real single-node MinIO
+  server (2026-07-19)**: connectivity, the reads, the exposure audit (it correctly
+  scored an anonymously-writable bucket `high` and named `PUBLIC_WRITE_POLICY`), the
+  governance loop (real `set_versioning` → undo restoring it to `Suspended`, the
+  correct S3 inverse), and read-only mode. **Distributed / multi-node MinIO is still
+  unverified** — healing was never exercised against a real degraded drive or erasure
+  set — as are lifecycle/quota writes and TLS endpoints. See
+  [docs/VERIFICATION.md](docs/VERIFICATION.md); `minio-aiops doctor` is the fastest
+  live check.
 
 ## Missing a capability?
 
