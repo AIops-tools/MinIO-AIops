@@ -85,12 +85,20 @@ def test_drive_status_fullest_first_and_resilient():
             {"labels": {"server": "m1", "drive": "/d2"}, "value": 10.0},
         ],
     }
-    rows = ops.drive_status(_conn(m))
+    out = ops.drive_status(_conn(m))
+    rows = out["drives"]
     assert rows[0]["drive"] == "/d2" and rows[0]["usedRatio"] == pytest.approx(0.9)
+    assert out["returned"] == 2
+    assert out["error"] is None
 
+    # A broken scrape must be distinguishable from "this server has no drives":
+    # returning a bare [] for both is how a metric-name mismatch stayed invisible.
     broken = MagicMock(name="conn")
     broken.metrics.side_effect = RuntimeError("down")
-    assert ops.drive_status(broken) == []
+    failed = ops.drive_status(broken)
+    assert failed["drives"] == []
+    assert failed["returned"] == 0
+    assert "down" in failed["error"]
 
 
 def test_node_status_aggregates_per_server():

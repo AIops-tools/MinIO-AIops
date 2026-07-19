@@ -14,7 +14,7 @@ from __future__ import annotations
 from typing import Any
 
 from minio_aiops.ops import health as h
-from minio_aiops.ops._util import pct, s
+from minio_aiops.ops._util import as_int, pct, s
 from minio_aiops.prom import by_label, first_value, sum_values
 
 # ── thresholds (ratios 0-1) ────────────────────────────────────────────────
@@ -47,8 +47,8 @@ def _drive_usage(metrics: dict) -> list[dict]:
         rows.append(
             {
                 "drive": s(key),
-                "usedBytes": used.get(key),
-                "totalBytes": tot,
+                "usedBytes": as_int(used.get(key)),
+                "totalBytes": as_int(tot),
                 "usedRatio": ratio,
             }
         )
@@ -170,8 +170,8 @@ def capacity_rca(conn: Any) -> dict:
 
     return {
         "healthy": not findings,
-        "usableTotalBytes": usable_total,
-        "usableUsedBytes": used,
+        "usableTotalBytes": as_int(usable_total),
+        "usableUsedBytes": as_int(used),
         "usedRatio": used_ratio,
         "drivesOffline": int(drives_offline),
         "nodesOffline": int(nodes_offline),
@@ -205,7 +205,7 @@ def usage_by_bucket(conn: Any, limit: int = 25) -> dict:
     usage = by_label(metrics, M_BUCKET_USAGE, "bucket")
     objects = by_label(metrics, M_BUCKET_OBJECTS, "bucket")
     rows = [
-        {"bucket": s(name), "usedBytes": val, "objects": objects.get(name)}
+        {"bucket": s(name), "usedBytes": as_int(val), "objects": as_int(objects.get(name))}
         for name, val in usage.items()
     ]
     rows.sort(key=lambda r: -(r["usedBytes"] or 0))

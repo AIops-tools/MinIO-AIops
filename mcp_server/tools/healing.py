@@ -25,9 +25,13 @@ def healing_health(target: Optional[str] = None) -> dict:
 
 @mcp.tool()
 @governed_tool(risk_level="low")
-@tool_errors("list")
-def drive_status(target: Optional[str] = None) -> list:
+@tool_errors("dict")
+def drive_status(target: Optional[str] = None) -> dict:
     """[READ] Per-drive rows (server, drive, used ratio), fullest first.
+
+    Returns {"drives": [...], "returned": N, "error": str | None}. A non-null
+    "error" means the metrics scrape failed — that is NOT the same as a server
+    with no drives, so do not report an empty list as "healthy, nothing to see".
 
     Args:
         target: MinIO target name from config; omit for the default.

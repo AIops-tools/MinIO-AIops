@@ -53,6 +53,25 @@ def opt_s(value: Any, limit: int = 256) -> str | None:
     return opt_str(value, limit)
 
 
+def as_int(value: Any) -> int | None:
+    """Coerce a Prometheus sample value to ``int``, preserving absence.
+
+    Prometheus exposition is float-typed on the wire, so byte counts and object
+    counts arrive as ``1500000.0`` / ``3.0``. They are integers in every sense
+    that matters to a reader, and rendering them with a ``.0`` invites the
+    question of whether the number was rounded.
+
+    ``None`` stays ``None``: these come from ``.get()`` lookups where a missing
+    sample is a real outcome, and an unknown count must not become ``0``.
+    """
+    if value is None:
+        return None
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return None
+
+
 def bytes_h(n: Any) -> str:
     """Human-readable bytes (best-effort; returns '' for non-numeric)."""
     if not isinstance(n, (int, float)):

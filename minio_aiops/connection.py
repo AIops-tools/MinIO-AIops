@@ -41,6 +41,8 @@ _HEALTH_LIVE = "/minio/health/live"
 _HEALTH_READY = "/minio/health/ready"
 _HEALTH_CLUSTER = "/minio/health/cluster"
 _METRICS_CLUSTER = "/minio/v2/metrics/cluster"
+_METRICS_NODE = "/minio/v2/metrics/node"
+_METRICS_BUCKET = "/minio/v2/metrics/bucket"
 
 # S3 error codes that mean "the sub-resource simply isn't configured" — reads
 # translate these to None rather than raising.
@@ -556,38 +558,71 @@ class MinioConnection:
             "serverStatus": headers.get("X-Minio-Server-Status"),
         }
 
-    def metrics_text(self) -> str:
-        """Raw cluster metrics exposition text (bearer-token or public auth)."""
+    def _scrape(self, endpoint: str) -> str:
+        """Raw metrics exposition text for one endpoint (bearer-token or public auth)."""
         headers = {}
         if not self._target.metrics_public:
             token = _prom_bearer_token(self._target.access_key, self._target.secret_key)
             headers["Authorization"] = f"Bearer {token}"
         try:
-            resp = self.http.get(_METRICS_CLUSTER, headers=headers)
+            resp = self.http.get(endpoint, headers=headers)
         except httpx.HTTPError as exc:
-            raise _teach(exc, _METRICS_CLUSTER, self._target) from exc
+            raise _teach(exc, endpoint, self._target) from exc
         if resp.status_code == 403:
             raise MinioApiError(
-                f"Metrics endpoint denied access (403) at {_METRICS_CLUSTER}. If the "
+                f"Metrics endpoint denied access (403) at {endpoint}. If the "
                 f"server runs with MINIO_PROMETHEUS_AUTH_TYPE=public, set "
                 f"metrics_public: true for this target; otherwise the bearer token "
                 f"derived from the credentials was rejected — check the key pair.",
                 status_code=403,
-                op=_METRICS_CLUSTER,
+                op=endpoint,
             )
         if not (200 <= resp.status_code < 300):
             raise MinioApiError(
-                f"Metrics endpoint returned {resp.status_code} at {_METRICS_CLUSTER}.",
+                f"Metrics endpoint returned {resp.status_code} at {endpoint}.",
                 status_code=resp.status_code,
-                op=_METRICS_CLUSTER,
+                op=endpoint,
             )
         return resp.text
 
+    def metrics_text(self) -> str:
+        """Raw *cluster* metrics exposition text (kept for callers wanting one scrape)."""
+        return self._scrape(_METRICS_CLUSTER)
+
     def metrics(self) -> dict[str, list[dict]]:
-        """Parsed cluster metrics: {metricName: [{labels, value}, ...]}."""
+        """Parsed metrics from every relevant endpoint: {metricName: [{labels, value}]}.
+
+        MinIO splits its Prometheus exposition across **three** endpoints, and the
+        names do not overlap:
+
+        - ``/cluster`` — cluster capacity, erasure-set health, node counts
+        - ``/node``    — per-drive capacity (``minio_node_drive_*``), heal counters
+        - ``/bucket``  — per-bucket usage (``minio_bucket_usage_*``)
+
+        Scraping only ``/cluster`` (as this did before) meant every per-drive and
+        per-bucket reader silently saw *nothing* — an empty drive list is
+        indistinguishable from a healthy server with no drives. Confirmed against a
+        real 4-drive erasure set: 12 of the 30 metric names this package consumes are
+        absent from ``/cluster``.
+
+        ``/cluster`` and ``/node`` are required. ``/bucket`` is best-effort: some
+        deployments disable it and it is the expensive one on a server with many
+        buckets, so its absence degrades the bucket-usage readers rather than
+        failing the whole call.
+        """
         from minio_aiops.prom import parse_metrics_text
 
-        return parse_metrics_text(self.metrics_text())
+        merged: dict[str, list[dict]] = {}
+        for endpoint in (_METRICS_CLUSTER, _METRICS_NODE):
+            for name, samples in parse_metrics_text(self._scrape(endpoint)).items():
+                merged.setdefault(name, []).extend(samples)
+        try:
+            bucket_text = self._scrape(_METRICS_BUCKET)
+        except MinioApiError:
+            return merged
+        for name, samples in parse_metrics_text(bucket_text).items():
+            merged.setdefault(name, []).extend(samples)
+        return merged
 
     def close(self) -> None:
         if self._http is not None:

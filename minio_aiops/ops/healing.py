@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from minio_aiops.ops._util import pct, s
+from minio_aiops.ops._util import as_int, pct, s
 from minio_aiops.prom import first_value, sum_values
 
 # Erasure-set metrics (labels: pool, set).
@@ -178,12 +178,18 @@ M_DRIVE_OFFLINE_NODE = "minio_node_drive_offline_total"
 M_DRIVE_ONLINE_NODE = "minio_node_drive_online_total"
 
 
-def drive_status(conn: Any) -> list[dict]:
-    """[READ] Per-drive rows (server, drive, used ratio), fullest first."""
+def drive_status(conn: Any) -> dict:
+    """[READ] Per-drive rows (server, drive, used ratio), fullest first.
+
+    Returns an envelope, not a bare list: an empty list alone cannot say whether
+    the server genuinely has no drives or the metrics scrape failed. This
+    previously swallowed every scrape error and returned ``[]`` — which is how a
+    metric-name mismatch went unnoticed, since "no drives" looked like success.
+    """
     try:
         metrics = conn.metrics()
-    except Exception:  # noqa: BLE001 — a status probe must survive a broken scrape
-        return []
+    except Exception as exc:  # noqa: BLE001 — reported, never silently swallowed
+        return {"drives": [], "returned": 0, "error": s(exc, 200)}
     total = {}
     free = {}
     for sample in metrics.get(M_DRIVE_TOTAL) or []:
@@ -202,13 +208,13 @@ def drive_status(conn: Any) -> list[dict]:
             {
                 "server": s(server),
                 "drive": s(drive),
-                "totalBytes": tot,
-                "freeBytes": free.get(key),
+                "totalBytes": as_int(tot),
+                "freeBytes": as_int(free.get(key)),
                 "usedRatio": pct(used, tot),
             }
         )
     rows.sort(key=lambda r: -(r["usedRatio"] or 0))
-    return rows
+    return {"drives": rows, "returned": len(rows), "error": None}
 
 
 def node_status(conn: Any) -> dict:
@@ -231,7 +237,7 @@ def node_status(conn: Any) -> dict:
             {
                 "server": s(server),
                 "drivesOnline": per_node_online.get(server),
-                "drivesOffline": per_node_offline.get(server),
+                "drivesOffline": as_int(per_node_offline.get(server)),
             }
             for server in servers
         ],

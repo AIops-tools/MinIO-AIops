@@ -181,5 +181,10 @@ def bucket_exposure_audit(conn: Any, limit: int = 100) -> dict:
         "truncated": len(buckets) > requested,
         "atRisk": sum(1 for r in rows if r["riskScore"] > 0),
         "highRisk": sum(1 for r in rows if r["riskLevel"] == "high"),
-        "findings": [r for r in rows if r["riskScore"] > 0],
+        # Ranked worst-first by riskScore; the rank is stated explicitly so a
+        # consumer never has to infer priority from list position.
+        "findings": [
+            {**r, "rank": i}
+            for i, r in enumerate((x for x in rows if x["riskScore"] > 0), 1)
+        ],
     }

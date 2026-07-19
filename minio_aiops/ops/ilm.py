@@ -18,7 +18,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-from minio_aiops.ops._util import s
+from minio_aiops.ops._util import as_int, s
 from minio_aiops.prom import by_label
 
 M_BUCKET_USAGE = "minio_bucket_usage_total_bytes"
@@ -176,7 +176,7 @@ def lifecycle_gap_analysis(conn: Any, limit: int = 100) -> dict:
             row = {
                 "bucket": s(name),
                 "versioning": s(versioning),
-                "usedBytes": bucket_bytes,
+                "usedBytes": as_int(bucket_bytes),
                 "gaps": gaps,
             }
             if errors:
