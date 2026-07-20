@@ -19,6 +19,7 @@ from minio_aiops.cli._common import (
     cli_errors,
     console,
     double_confirm,
+    dry_run_preview,
     dry_run_print,
     get_connection,
     truncation_note,
@@ -165,9 +166,14 @@ def bucket_policy_set(
 
     policy_json = Path(policy_file).read_text("utf-8")
     if dry_run:
-        dry_run_print(operation="set_bucket_policy",
-                      api_call=f"PUT /{bucket}?policy",
-                      parameters={"policyChars": len(policy_json)})
+        # Through the governed call: set_bucket_policy refuses a policy that
+        # denies s3:PutBucketPolicy to this tool's own key, so a preview must
+        # report that rather than a green banner.
+        dry_run_preview(
+            gov.set_bucket_policy(bucket_name=bucket, policy_json=policy_json,
+                                  dry_run=True, target=target),
+            operation="set_bucket_policy", api_call=f"PUT /{bucket}?policy",
+            parameters={"policyChars": len(policy_json)})
         return
     console.print_json(json.dumps(
         gov.set_bucket_policy(bucket_name=bucket, policy_json=policy_json, target=target)))

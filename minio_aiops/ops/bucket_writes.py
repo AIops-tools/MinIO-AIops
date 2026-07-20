@@ -7,6 +7,13 @@ bucket (only allowed when verifiably empty) and purging incomplete uploads
 (the parts are unrecoverable) — record ``priorState`` only: there is honestly
 no undo, and pretending otherwise would be worse than saying so.
 
+``set_bucket_policy`` additionally refuses a policy that would revoke this
+tool's own ability to put a policy (:class:`SelfLockout`). An explicit Deny
+beats any IAM Allow, so a statement denying ``s3:PutBucketPolicy`` to the
+configured access key makes the undo — which replays the prior policy — denied
+in turn. This tool has no IAM surface at all, so a bucket policy is the only
+way it can revoke its own access, and there would be no way back in-tool.
+
 All bucket names pass ``check_bucket_name`` (the injection gate) first.
 """
 
@@ -23,10 +30,119 @@ VERSIONING_STATES = ("Enabled", "Suspended")
 # younger than this is plausibly still legitimate.
 DEFAULT_PURGE_OLDER_THAN_DAYS = 7
 
+# The action that puts a policy. Denying it to ourselves is what makes a policy
+# write irreversible; s3:* covers it too, and so does the s3:PutBucket* glob.
+_PUT_POLICY_ACTION = "s3:putbucketpolicy"
+_WILDCARD_ACTIONS = ("*", "s3:*")
+
+
+class SelfLockout(ValueError):  # noqa: N818 — teaching error, reads as a statement
+    """Refused: the operation would revoke this tool's own access to the target."""
+
+
+def _as_list(value: Any) -> list[str]:
+    """S3 policy fields are 'string or list of string' everywhere."""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, (list, tuple)):
+        return [v for v in value if isinstance(v, str)]
+    return []
+
+
+def _covers_put_policy(actions: list[str]) -> bool:
+    """Whether an Action set covers s3:PutBucketPolicy (literal, glob or s3:*)."""
+    for action in actions:
+        normalized = action.strip().lower()
+        if normalized in _WILDCARD_ACTIONS or normalized == _PUT_POLICY_ACTION:
+            return True
+        # A trailing glob such as 's3:PutBucket*' or 's3:Put*'.
+        if normalized.endswith("*") and _PUT_POLICY_ACTION.startswith(normalized[:-1]):
+            return True
+    return False
+
+
+def _principals(statement: dict) -> list[str]:
+    """Flatten a Principal field, which may be '*', a list, or {'AWS': [...]}."""
+    principal = statement.get("Principal")
+    if isinstance(principal, dict):
+        flattened: list[str] = []
+        for value in principal.values():
+            flattened.extend(_as_list(value))
+        return flattened
+    return _as_list(principal)
+
+
+def _hits_self(statement: dict, access_key: str) -> bool:
+    """Whether a Deny statement's Principal covers the configured access key.
+
+    ``*`` matches everyone, this tool included. Otherwise the access key has to
+    appear — either bare or as the tail of an ARN (``arn:aws:iam::…:user/KEY``).
+    """
+    for principal in _principals(statement):
+        candidate = principal.strip()
+        if candidate == "*":
+            return True
+        if access_key and (candidate == access_key or candidate.endswith(f"/{access_key}")):
+            return True
+    return False
+
+
+def guard_set_bucket_policy(conn: Any, policy_json: str) -> None:
+    """Raise the :class:`SelfLockout` ``set_bucket_policy`` would raise, without writing.
+
+    Called by ``set_bucket_policy`` itself *and* by the MCP wrapper ahead of its
+    ``dry_run`` early return, so a preview of a self-denying policy reports the
+    refusal instead of a green ``wouldSetPolicy``. Both paths run this one
+    function, so the preview and the real call can never disagree.
+
+    Detection is purely local — the submitted JSON plus ``target.access_key`` —
+    so there is no round trip and no unknown-identity case. A malformed document
+    is left to the caller's own validation.
+    """
+    try:
+        parsed = json.loads(policy_json)
+    except (TypeError, ValueError):
+        return  # not our error to raise; set_bucket_policy reports it properly
+    if not isinstance(parsed, dict):
+        return
+    raw_key = getattr(getattr(conn, "target", None), "access_key", "")
+    # Only a real string identifies us; anything else is treated as "no key",
+    # which still catches the Principal:"*" case (that one denies everyone).
+    access_key = raw_key if isinstance(raw_key, str) else ""
+    for statement in parsed.get("Statement") or []:
+        if not isinstance(statement, dict):
+            continue
+        if str(statement.get("Effect", "")).strip().lower() != "deny":
+            continue
+        if not _covers_put_policy(_as_list(statement.get("Action"))):
+            continue
+        if not _hits_self(statement, access_key):
+            continue
+        raise SelfLockout(
+            "Refusing this policy: it contains an explicit Deny on "
+            "s3:PutBucketPolicy that covers the access key this tool "
+            "authenticates with. An explicit Deny beats every Allow, so the "
+            "policy would apply and the undo that replays the prior policy "
+            "would itself be denied — this tool has no IAM surface, so there "
+            "would be no way back. Scope the Deny to a specific other "
+            "principal, or apply it with mc/an admin credential that keeps a "
+            "route back in."
+        )
+
 
 def set_bucket_policy(conn: Any, bucket: str, policy_json: str) -> dict:
-    """[WRITE][medium] Replace the bucket policy. Reversible → prior policy JSON."""
+    """[WRITE][medium] Replace the bucket policy. Reversible → prior policy JSON.
+
+    **Refuses a policy that denies ``s3:PutBucketPolicy`` to this tool's own
+    access key** (directly, via ``s3:*``, or via a ``*`` Principal) — that write
+    would revoke the permission its own undo needs. Note this only bites when
+    the tool is configured with a non-root key: ``MINIO_ROOT_USER`` bypasses
+    policy evaluation entirely, and both configurations are in the field.
+    """
     check_bucket_name(bucket)
+    guard_set_bucket_policy(conn, policy_json)
     try:
         parsed = json.loads(policy_json)
     except (TypeError, ValueError) as exc:
@@ -90,6 +206,12 @@ def set_lifecycle(
 
     Either pass the day-count knobs (rules are built for you) or
     ``lifecycle_xml`` to apply a config verbatim (the undo-restore path).
+
+    The undo restores the RULE, not the data. Between this call and the undo,
+    MinIO applies the rule: objects it expires are deleted, and putting the
+    prior XML back does not bring them back. Reversible here means the
+    configuration returns, exactly as ``delete_queue`` in the sibling queue tool
+    means the queue returns and its messages do not.
     """
     check_bucket_name(bucket)
     for name, value in (
@@ -121,6 +243,10 @@ def set_lifecycle(
             "verbatimXml": bool(lifecycle_xml),
         },
         "priorState": {"lifecycleXml": prior_xml},
+        "note": (
+            "Undo restores the prior lifecycle configuration; objects this rule "
+            "expires in the meantime are NOT restored."
+        ),
     }
 
 

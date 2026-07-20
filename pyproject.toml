@@ -4,12 +4,12 @@ build-backend = "hatchling.build"
 
 [project]
 name = "minio-aiops"
-version = "0.3.0"
+version = "0.4.0"
 description = "Governed AI-ops for MinIO object storage: capacity & usage RCA, bucket exposure audit, lifecycle/ILM gap analysis, healing & erasure-set health, and guarded bucket writes with a built-in governance harness (audit, budget, undo, risk tiers)"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
-authors = [{ name = "wei", email = "zhouwei008@gmail.com" }]
+authors = [{ name = "Wei Zhou", email = "zhouwei008@gmail.com" }]
 dependencies = [
     "minio>=7.2,<8.0",
     "httpx>=0.27,<1.0",

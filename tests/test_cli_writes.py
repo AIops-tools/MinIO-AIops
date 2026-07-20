@@ -101,3 +101,52 @@ def test_cli_versioning_set_goes_through_governance(gov_home, monkeypatch):
     assert result.exit_code == 0, result.output
     conn.set_bucket_versioning.assert_called_once_with("data-bkt", "Enabled")
     assert _audit_tools(gov_home / "audit.db") == ["set_versioning"]
+
+
+@pytest.mark.unit
+def test_cli_policy_set_dry_run_reports_a_self_denying_policy(gov_home, monkeypatch, tmp_path):
+    """The CLI preview must refuse what the CLI write would refuse.
+
+    policy-set is self-lockout guarded, so its preview routes through the
+    governed twin to find out whether the real call would be refused. Printing a
+    green DRY-RUN banner for a policy that is about to be rejected is the
+    preview being wrong, not merely incomplete.
+    """
+    from minio_aiops.cli import app
+
+    conn = _mock_conn(monkeypatch)
+    conn.target.access_key = "aiops-svc"
+    policy_file = tmp_path / "deny.json"
+    policy_file.write_text(
+        '{"Version":"2012-10-17","Statement":[{"Effect":"Deny",'
+        '"Principal":{"AWS":"aiops-svc"},"Action":"s3:PutBucketPolicy",'
+        '"Resource":"arn:aws:s3:::data-bkt/*"}]}'
+    )
+    result = CliRunner().invoke(
+        app, ["bucket", "policy-set", "data-bkt", "--file", str(policy_file), "--dry-run"]
+    )
+    assert result.exit_code == 1, result.output
+    assert "DRY-RUN" not in result.output
+    assert "explicit Deny" in result.output
+    conn.set_bucket_policy.assert_not_called()
+
+
+@pytest.mark.unit
+def test_cli_policy_set_dry_run_still_previews_an_ordinary_policy(gov_home, monkeypatch,
+                                                                 tmp_path):
+    """Exactness on the CLI path: a normal policy still gets its green banner."""
+    from minio_aiops.cli import app
+
+    conn = _mock_conn(monkeypatch)
+    conn.target.access_key = "aiops-svc"
+    policy_file = tmp_path / "allow.json"
+    policy_file.write_text(
+        '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":"*",'
+        '"Action":"s3:GetObject","Resource":"arn:aws:s3:::data-bkt/*"}]}'
+    )
+    result = CliRunner().invoke(
+        app, ["bucket", "policy-set", "data-bkt", "--file", str(policy_file), "--dry-run"]
+    )
+    assert result.exit_code == 0, result.output
+    assert "DRY-RUN" in result.output
+    conn.set_bucket_policy.assert_not_called()  # a dry-run must never write

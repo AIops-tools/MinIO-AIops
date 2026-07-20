@@ -152,7 +152,7 @@ def recorded(monkeypatch):
     box: dict = {}
 
     class _Store:
-        def record(self, *, skill, tool, undo_descriptor, orig_params):
+        def record(self, *, skill, tool, undo_descriptor, orig_params, effect_verified=True):
             box["d"] = undo_descriptor
             return "undo-1"
 

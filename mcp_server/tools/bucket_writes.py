@@ -122,17 +122,25 @@ def set_bucket_policy(bucket_name: str, policy_json: str, dry_run: bool = False,
     An anonymous-Allow policy makes the bucket public — check
     bucket_exposure_audit after changing policies.
 
+    Refuses a policy whose explicit Deny on s3:PutBucketPolicy covers this
+    tool's own access key: an explicit Deny beats every Allow, so the undo that
+    replays the prior policy would itself be denied. Enforced under dry_run too.
+
     Args:
         bucket_name: Bucket name (from bucket_ls).
         policy_json: Full policy document as a JSON string (must contain 'Statement').
         dry_run: If True, preview without applying.
         target: MinIO target name from config; omit for the default.
     """
+    conn = _get_connection(target)
+    # Ahead of the dry_run return: a preview whose real call would be refused
+    # must say so, or the caller reads the refusal as transient and retries.
+    ops.guard_set_bucket_policy(conn, policy_json)
     if dry_run:
         return {"dryRun": True,
                 "wouldSetPolicy": {"bucket": bucket_name,
                                    "policyChars": len(policy_json or "")}}
-    return ops.set_bucket_policy(_get_connection(target), bucket_name, policy_json)
+    return ops.set_bucket_policy(conn, bucket_name, policy_json)
 
 
 @mcp.tool()
@@ -187,6 +195,10 @@ def set_lifecycle(bucket_name: str, expire_days: Optional[int] = None,
     noncurrent-version expiry, abort-incomplete-uploads), or lifecycle_xml to
     apply a configuration verbatim (used by undo restores). REPLACES any
     existing rules — the prior config is captured for undo.
+
+    The undo restores the RULE, not the data: objects the rule expires before
+    you undo are deleted, and putting the prior configuration back does not
+    bring them back.
 
     Args:
         bucket_name: Bucket name (from bucket_ls).
