@@ -62,11 +62,7 @@ minio-aiops mcp                          # or: minio-aiops-mcp
 Common options: `--target/-t <name>` selects a configured target (default: the
 first one); `--dry-run` previews a write without executing.
 
-## Read-only mode
-
-```bash
-export MINIO_READ_ONLY=1     # every write is refused; MCP write tools are not registered
-```
+## Truncation
 
 Listing commands (`bucket ls`, `bucket objects`, `bucket uploads`,
 `capacity usage`, `bucket audit`, `bucket ilm-gap`) return a

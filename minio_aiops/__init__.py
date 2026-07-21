@@ -1,9 +1,9 @@
 """minio-aiops — governed MinIO object-storage operations for AI agents.
 
 Standalone and self-contained: the governance harness (audit, token budget,
-undo-token recording, graduated risk tiers, output sanitize) is bundled under
-``minio_aiops.governance`` — this package has no external skill-family
-dependency. Preview: not yet full-coverage.
+undo-token recording, descriptive risk-tier labelling, output sanitize) is
+bundled under ``minio_aiops.governance`` — this package has no external
+skill-family dependency. Preview: not yet full-coverage.
 """
 
 from importlib.metadata import PackageNotFoundError, version

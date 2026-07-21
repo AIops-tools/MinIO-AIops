@@ -9,15 +9,29 @@ the tool now enforces them itself.
 The distinction matters. A guardrail in a prompt is a request. A guardrail in the
 harness is a guarantee. Anything below that we could move into the harness, we did.
 
-## What the tool now enforces — do not waste prompt budget on these
+## Authorization is not this tool's job — decide it where it belongs
+
+Whether a write should happen is your decision, or the account's. The tool does
+not gate it — there is no read-only switch and no approval prompt to configure.
+The two right places to control read vs write:
+
+- **The access key you connect with.** Give it a read-only IAM policy. A write
+  then fails at the server, which is the only place the permission actually
+  lives — no skill-side flag can be argued around by a model, but a revoked
+  permission cannot be.
+- **Your agent's system prompt.** If you want an observe-only session, tell the
+  model not to call the write tools (they are clearly tagged `[WRITE]`).
+
+What the tool *does* guarantee is that you can always see what happened:
+
+## What the tool enforces — do not waste prompt budget on these
 
 | You might be tempted to prompt | Why you don't need to |
 |---|---|
-| "Work read-only, never modify anything" | Set `MINIO_READ_ONLY=1`. Write tools are then **not registered at all** — they never appear in the tool list, so the model cannot call one even if it tries. The `@governed_tool` harness independently refuses writes, so the CLI is covered too. |
 | "Don't invent a value when a field is missing" | A field the API did not return comes back as `null`, never as `""` — a bucket with no `createdAt`, an object with no `lastModified`/`versionId`, an upload with no `initiated` time. Absent and empty are distinguishable in the payload. |
 | "Tell me if the object list was cut off" | Every bounded listing returns `{"objects": [...], "returned": N, "limit": L, "truncated": true/false}` (and the same shape with `buckets` / `uploads`). Truncation is measured — `object_ls` fetches one row past the limit, the bucket/upload/usage listings measure against the full set — never guessed from the count equalling the limit. |
 | "Tell me which exposed bucket to fix first" | `bucket_exposure_audit` returns findings sorted riskiest-first with an explicit `riskScore` and `riskLevel`; `capacity_rca`, `healing_health`, and `lifecycle_gap_analysis` each attach a `severity` plus `cause` and `suggestedAction` to every finding. The priority is in the payload, not implied by list position. |
-| "Confirm before anything destructive" | Destructive operations require a `--dry-run`-able preview + double confirmation at the CLI, and a named approver (`MINIO_AUDIT_APPROVED_BY`) for high-risk tiers. `bucket_delete` additionally refuses unless the bucket is verifiably empty (including noncurrent versions and delete markers). |
+| "Confirm before anything destructive" | Destructive operations require a `--dry-run`-able preview + double confirmation at the CLI. `bucket_delete` additionally refuses unless the bucket is verifiably empty (including noncurrent versions and delete markers). |
 | "Log what you did" | Every call is audited to `~/.minio-aiops/audit.db` regardless of what the model says it did. Reversible writes record their prior state (`priorState`) so `undo_list` / `undo_apply` can roll them back. |
 
 ## What still needs a prompt
@@ -64,17 +78,19 @@ SCOPE
 
 ## Recommended setup for a local model
 
+Start with a connection that *cannot* write, verify, and widen the key's
+permission only when you trust the setup — a `bucket_delete` or a policy change
+is cheap to invoke and expensive to get wrong:
+
 ```bash
-# Read-only until you trust the setup — this is enforced, not advisory.
-export MINIO_READ_ONLY=1
+# Connect with an access key whose IAM policy is read-only, then:
 minio-aiops doctor
 ```
 
-Then, when you are ready to allow writes, unset it and set an approver so the
-high-risk tier has an accountable name on it:
+Optionally annotate the audit trail with who is operating and why — recorded on
+every row, never required:
 
 ```bash
-unset MINIO_READ_ONLY
 export MINIO_AUDIT_APPROVED_BY="your.name@example.com"
 export MINIO_AUDIT_RATIONALE="lifecycle cleanup window 2026-07-20"
 ```

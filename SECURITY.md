@@ -37,23 +37,25 @@ Every MCP tool runs through the bundled `@governed_tool` harness
 - **Token/runaway budget** — hard ceilings (`MINIO_MAX_TOOL_CALLS` /
   `MINIO_MAX_TOOL_SECONDS`) plus an on-by-default guard that trips a tight
   poll/retry loop, preventing unbounded API consumption.
-- **Graduated risk tiers, secure by default** — with no
-  `~/.minio-aiops/rules.yaml`, high-risk writes require a recorded approver;
-  the `init` wizard seeds an explicit, editable starter policy.
+- **Risk-tier labelling** — each tool's declared `risk_level` is recorded on
+  the audit row as a descriptive tier; it is a label, not a gate. There is no
+  read-only switch, policy file, or approval gate — whether a write is permitted
+  is the agent's decision or the permission of the access key you connect with.
 - **Undo-token recording** — reversible writes capture the BEFORE state and
   record an inverse descriptor (prior policy JSON, prior lifecycle XML, prior
   versioning state, prior quota) so the change can be rolled back.
 
 ### State-Changing Operations
-`bucket_delete` is `risk_level=high`, accepts a `dry_run` preview, requires a
-recorded approver (`MINIO_AUDIT_APPROVED_BY` + `MINIO_AUDIT_RATIONALE`) under
-the default policy, and is **refused unless the bucket is verifiably empty**
-(including noncurrent versions and delete markers) — this tool never
-mass-deletes objects to force a bucket empty. `remove_incomplete_uploads`
-only aborts uploads older than a safety window (default 7 days) and records
-priorState (count + sample). The CLI double-confirms both and supports
-`--dry-run` everywhere. All agent-supplied bucket names are validated against
-strict S3 naming rules before any request is built (the injection gate).
+`bucket_delete` is `risk_level=high`, accepts a `dry_run` preview, and is
+**refused unless the bucket is verifiably empty** (including noncurrent versions
+and delete markers) — this tool never mass-deletes objects to force a bucket
+empty. `remove_incomplete_uploads` only aborts uploads older than a safety
+window (default 7 days) and records priorState (count + sample). The CLI
+double-confirms both and supports `--dry-run` everywhere.
+`MINIO_AUDIT_APPROVED_BY` + `MINIO_AUDIT_RATIONALE` are optional audit
+annotations recorded when set, never required. All agent-supplied bucket names
+are validated against strict S3 naming rules before any request is built (the
+injection gate).
 
 ### SSL/TLS Verification
 `secure` (https) and `verify_ssl` default to true; disable verification only

@@ -27,10 +27,18 @@ DryRunOption = Annotated[
 
 
 def _cli_error_types() -> tuple[type[BaseException], ...]:
-    """Exceptions translated to a one-line teaching error instead of a traceback."""
-    from minio_aiops.connection import MinioApiError
+    """Exceptions translated to a one-line teaching error instead of a traceback.
 
-    return (MinioApiError, KeyError, OSError, ValueError)
+    ``PolicyDenied`` is retained here defensively even though the harness no
+    longer raises it — the authorization layer (read-only mode, deny rules, the
+    approver gate) was removed. Keeping the catch means that if any inner code
+    ever raises it again, it still reaches the operator as a one-line message
+    rather than a bare traceback.
+    """
+    from minio_aiops.connection import MinioApiError
+    from minio_aiops.governance import PolicyDenied
+
+    return (MinioApiError, KeyError, OSError, ValueError, PolicyDenied)
 
 
 def cli_errors(fn: Callable) -> Callable:

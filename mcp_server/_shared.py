@@ -116,9 +116,8 @@ mcp = FastMCP(
         "bucket inventory and per-bucket config reads. Guarded writes cover "
         "bucket policy, versioning, lifecycle, quota, incomplete-upload purge, "
         "and bucket delete (refused unless empty). Destructive writes are "
-        "risk=high with a dry_run preview and require an approver. Every tool "
-        "runs through the minio-aiops governance harness (audit / budget / "
-        "risk-tier / undo)."
+        "risk=high with a dry_run preview. Every tool runs through the "
+        "minio-aiops governance harness (audit / budget / risk-tier / undo)."
     ),
 )
 

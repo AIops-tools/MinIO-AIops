@@ -62,9 +62,9 @@
 
 Missing something you need? **Open an issue or send a PR** — feedback welcome.
 
-## Read-only mode
+## Authorization
 
-Set `MINIO_READ_ONLY=1` and every tool in the **Writes** table above is
-**unregistered** — it never appears in `list_tools()`. The `@governed_tool`
-harness independently refuses any non-`low`-risk call, so CLI and in-process
-callers are covered too. See `agent-guardrails.md`.
+There is no read-only switch, policy file, or approval gate. Whether a write is
+permitted is the agent's decision or the permission of the access key you
+connect with (a read-only IAM policy makes writes fail at the server). Every
+call — read or write, MCP or CLI — is audited. See `agent-guardrails.md`.

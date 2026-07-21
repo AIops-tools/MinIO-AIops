@@ -22,7 +22,7 @@ compatibility: >
   Standalone, self-governed MinIO operations. The governance harness (audit, policy, token/runaway budget, undo, risk-tiers) is bundled in the package — no external skill-family dependency. Works against any reasonably current MinIO server (single-node or distributed/erasure-coded); admin features (quota, server info) need admin-capable keys.
   All write operations are audited to a local SQLite DB under ~/.minio-aiops/ (relocatable via MINIO_AIOPS_HOME).
   Connection: the S3 API endpoint (host:port, default 9000; SigV4 via the official SDK), plus the unauthenticated health endpoints (/minio/health/live|ready|cluster) and the cluster metrics endpoint (/minio/v2/metrics/cluster — public mode or the default bearer-token mode; the token is derived from the stored credentials, no extra secret). The access key lives in config.yaml; the secret key is stored ENCRYPTED in ~/.minio-aiops/secrets.enc (Fernet/AES-128 + scrypt-derived key) — never plaintext on disk. Run 'minio-aiops init' to onboard, or 'minio-aiops secret set <target>' to add one. The store is unlocked by a master password from MINIO_AIOPS_MASTER_PASSWORD (non-interactive/MCP/CI) or an interactive prompt (CLI on a TTY). A legacy plaintext env var MINIO_<TARGET_NAME_UPPER>_SECRET_KEY is still honoured as a fallback with a deprecation warning (migrate with 'minio-aiops secret migrate'). Secrets are held only in memory, never logged or echoed.
-  State-changing operations require double confirmation at the CLI layer and support --dry-run. All write tools pass through the @governed_tool decorator (pre-check + budget guard + audit + risk-tier gate). bucket_delete is high-risk, dry-run + double-confirm, and refused unless the bucket is verifiably empty (including versions and delete markers); remove_incomplete_uploads only aborts uploads older than a safety window. Reversible writes (set/delete bucket policy, set_versioning, set/delete lifecycle, set_bucket_quota) capture the prior state and record an inverse undo descriptor.
+  State-changing operations require double confirmation at the CLI layer and support --dry-run. All write tools pass through the @governed_tool decorator (budget guard + audit + undo + risk-tier labelling). bucket_delete is high-risk, dry-run + double-confirm, and refused unless the bucket is verifiably empty (including versions and delete markers); remove_incomplete_uploads only aborts uploads older than a safety window. Reversible writes (set/delete bucket policy, set_versioning, set/delete lifecycle, set_bucket_quota) capture the prior state and record an inverse undo descriptor.
   Webhooks: none — no outbound network calls beyond the configured MinIO endpoint.
   SSL: secure (https) and verify_ssl default to true; disable verification only for self-signed lab certificates.
   Transitive dependencies: the official minio SDK, httpx, and the MCP SDK. No post-install scripts or background services.
@@ -33,11 +33,11 @@ compatibility: >
 
 > **Disclaimer**: Community-maintained open-source project, **not affiliated with, endorsed by, or sponsored by MinIO, Inc. or any storage vendor.** Product and trademark names belong to their owners. Source at [github.com/AIops-tools/MinIO-AIops](https://github.com/AIops-tools/MinIO-AIops) under the MIT license.
 
-Governed MinIO object-storage operations — **31 MCP tools**, every one wrapped with the bundled `@governed_tool` harness: a local unified audit log under `~/.minio-aiops/`, policy engine, token/runaway budget guard, undo-token recording, and graduated-autonomy risk tiers. The secret key is stored **encrypted** (`~/.minio-aiops/secrets.enc`, Fernet + scrypt) — never plaintext on disk. Four flagship analyses turn raw state into plain-language **cause + suggested action**: `capacity_rca`, `bucket_exposure_audit`, `lifecycle_gap_analysis`, `healing_health`.
+Governed MinIO object-storage operations — **31 MCP tools**, every one wrapped with the bundled `@governed_tool` harness: a local unified audit log under `~/.minio-aiops/`, a token/runaway budget guard, undo-token recording, and a descriptive risk tier on every audit row. The secret key is stored **encrypted** (`~/.minio-aiops/secrets.enc`, Fernet + scrypt) — never plaintext on disk. Four flagship analyses turn raw state into plain-language **cause + suggested action**: `capacity_rca`, `bucket_exposure_audit`, `lifecycle_gap_analysis`, `healing_health`.
 
 > **Standalone**: the governance harness is bundled in the package (`minio_aiops.governance`) — minio-aiops has no external skill-family dependency. Verification status and the live-run checklist are in `docs/VERIFICATION.md`.
 
-> **Read-only mode**: set `MINIO_READ_ONLY=1` and the 9 write tools are **not registered** — they never appear in the tool list, and the harness refuses writes from any caller (MCP, CLI, in-process). Driving this with a smaller / local model? See `references/agent-guardrails.md`.
+> **Authorization is not this tool's job**: whether a write is permitted is the agent's judgement or the permission of the access key you connect with (a read-only IAM policy makes writes fail at the server). There is no read-only switch, policy file, or approval gate — the guarantee is that every call is audited. Driving this with a smaller / local model? See `references/agent-guardrails.md`.
 
 ## What This Skill Does
 
@@ -107,7 +107,7 @@ Every write step accepts `--dry-run`; irreversible ones also double-confirm.
 4. `minio-aiops undo list` → confirm an undo token was recorded for the change you just made.
 5. `minio-aiops bucket audit` → confirm the finding is gone.
 
-**Failure branch**: if the write is refused with a policy/approval error, that is secure-by-default working. With no `~/.minio-aiops/rules.yaml`, high-risk operations require a named approver — set `MINIO_AUDIT_APPROVED_BY` and `MINIO_AUDIT_RATIONALE` and retry. If the new policy breaks a legitimate consumer, `minio-aiops undo apply <id>` restores the exact prior policy document.
+**Failure branch**: if the write is refused by the server with an access-denied error, the access key you connected with lacks permission for that operation — the tool does not gate the write, the key does. Connect with a key whose IAM policy allows it (or ask whoever owns the key). If the new policy breaks a legitimate consumer, `minio-aiops undo apply <id>` restores the exact prior policy document.
 
 ### 3. "A drive died — how many more failures can we take?"
 
@@ -126,15 +126,15 @@ Every write step accepts `--dry-run`; irreversible ones also double-confirm.
 3. `minio-aiops bucket uploads <bucket>` → surface incomplete multipart uploads, which keep a bucket non-empty even when it looks empty.
 4. `minio-aiops bucket purge-uploads <bucket> --older-than-days 7` if any remain (dry-run first, double confirm).
 5. `minio-aiops bucket delete <bucket> --dry-run` → shows the API call, changes nothing.
-6. Re-run without `--dry-run`: double confirm, **high** risk, requires `MINIO_AUDIT_APPROVED_BY`/`MINIO_AUDIT_RATIONALE`. Execution re-checks emptiness (versions and delete markers included) and refuses otherwise — this tool never mass-deletes data.
+6. Re-run without `--dry-run`: double confirm, **high** risk. Execution re-checks emptiness (versions and delete markers included) and refuses otherwise — this tool never mass-deletes data.
 
 **Failure branch**: if the delete is refused as non-empty, that is the guard doing its job — the bucket still holds objects, noncurrent versions, delete markers, or incomplete uploads. Go back to step 3, and never work around the guard by deleting data out-of-band; this tool deliberately has no mass-delete path.
 
 ## Governance & Safety
 
-- Every tool is audited to `~/.minio-aiops/audit.db` (relocatable via `MINIO_AIOPS_HOME`).
-- High-risk ops (`bucket_delete`) require a named approver: set `MINIO_AUDIT_APPROVED_BY` and `MINIO_AUDIT_RATIONALE`.
-- **Secure by default**: with no `~/.minio-aiops/rules.yaml`, high-risk operations are denied unless `MINIO_AUDIT_APPROVED_BY` names an approver. `minio-aiops init` seeds a starter rules.yaml; an operator-authored rules file is honoured as-is.
+- The skill delivers reads and writes and records them; it does **not** decide whether a write is permitted — that is the agent's judgement or the permission of the access key you connect with (a read-only IAM policy makes writes fail at the server). There is no read-only switch, policy file, or approval gate.
+- **Audit is the guarantee**: every tool — MCP and CLI alike — is audited to `~/.minio-aiops/audit.db` (relocatable via `MINIO_AIOPS_HOME`). `MINIO_AUDIT_APPROVED_BY` / `MINIO_AUDIT_RATIONALE` are optional annotations recorded when set, never required.
+- The declared `risk_level` (`bucket_delete` is high) is carried into the audit row as a descriptive tier — a label for the reviewer, not a gate.
 - Destructive writes support `--dry-run` and double confirmation at the CLI.
 - Reversible writes record an inverse descriptor capturing the real prior state (policy JSON, lifecycle XML, versioning state, quota).
 

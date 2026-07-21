@@ -277,11 +277,13 @@ def set_bucket_quota(conn: Any, bucket: str, size_bytes: int) -> dict:
     }
 
 
-def delete_bucket(conn: Any, bucket: str) -> dict:
-    """[WRITE][high] Delete a bucket — refused unless verifiably empty. Irreversible.
+def guard_delete_bucket(conn: Any, bucket: str) -> None:
+    """Refuse a delete of a bucket that still holds data. A read; never writes.
 
-    The emptiness check includes noncurrent versions and delete markers; a
-    bucket that still holds any of those cannot be deleted safely (or at all).
+    Shared by ``delete_bucket`` and its dry-run so a preview can never report
+    green for a delete the real call would refuse. The emptiness check includes
+    noncurrent versions and delete markers; a bucket that still holds any of
+    those cannot be deleted safely (or at all).
     """
     check_bucket_name(bucket)
     if not conn.is_bucket_empty(bucket):
@@ -289,6 +291,11 @@ def delete_bucket(conn: Any, bucket: str) -> dict:
             f"Bucket '{s(bucket, 80)}' is not empty (objects, versions, or delete "
             f"markers remain). Empty it first — this tool never mass-deletes data."
         )
+
+
+def delete_bucket(conn: Any, bucket: str) -> dict:
+    """[WRITE][high] Delete a bucket — refused unless verifiably empty. Irreversible."""
+    guard_delete_bucket(conn, bucket)
     prior_meta: dict[str, Any] = {"bucket": s(bucket)}
     try:
         prior_meta["versioning"] = conn.get_bucket_versioning(bucket)
@@ -299,13 +306,15 @@ def delete_bucket(conn: Any, bucket: str) -> dict:
     return {"action": "delete_bucket", "bucket": s(bucket), "priorState": prior_meta}
 
 
-def remove_incomplete_uploads(
+def select_stale_uploads(
     conn: Any, bucket: str, older_than_days: int = DEFAULT_PURGE_OLDER_THAN_DAYS
-) -> dict:
-    """[WRITE][medium] Abort abandoned multipart uploads. priorState only, no undo.
+) -> tuple[list[dict], list[dict]]:
+    """Return ``(all_uploads, matched_for_purge)``. A read; never writes.
 
-    Only uploads at least ``older_than_days`` old are aborted (default 7),
-    protecting legitimately in-flight uploads; pass 0 to purge everything.
+    Shared by ``remove_incomplete_uploads`` and its dry-run so the preview
+    reports the count the purge will actually act on rather than a hand-written
+    hint. The purge is irreversible, so "how many, of how many" is precisely
+    what the operator needs BEFORE running it.
     """
     check_bucket_name(bucket)
     if not isinstance(older_than_days, int) or older_than_days < 0:
@@ -314,6 +323,18 @@ def remove_incomplete_uploads(
     victims = [
         u for u in uploads if (_age_days(u.get("initiated")) or 0) >= older_than_days
     ]
+    return uploads, victims
+
+
+def remove_incomplete_uploads(
+    conn: Any, bucket: str, older_than_days: int = DEFAULT_PURGE_OLDER_THAN_DAYS
+) -> dict:
+    """[WRITE][medium] Abort abandoned multipart uploads. priorState only, no undo.
+
+    Only uploads at least ``older_than_days`` old are aborted (default 7),
+    protecting legitimately in-flight uploads; pass 0 to purge everything.
+    """
+    uploads, victims = select_stale_uploads(conn, bucket, older_than_days)
     aborted = 0
     failures: list[str] = []
     for upload in victims:

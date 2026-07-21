@@ -270,22 +270,26 @@ def bucket_delete(bucket_name: str, dry_run: bool = False,
                   target: Optional[str] = None) -> dict:
     """[WRITE][risk=high] Delete a bucket — refused unless verifiably empty. Irreversible.
 
-    Pass dry_run=True to preview. Requires an approver (set
-    MINIO_AUDIT_APPROVED_BY) under the graduated-autonomy policy. The emptiness
-    check includes noncurrent versions and delete markers; this tool never
-    mass-deletes data to force a bucket empty.
+    Pass dry_run=True to preview. The emptiness check includes noncurrent
+    versions and delete markers; this tool never mass-deletes data to force a
+    bucket empty.
 
     Args:
         bucket_name: Bucket name (from bucket_ls).
         dry_run: If True, preview (including the emptiness check) without deleting.
         target: MinIO target name from config; omit for the default.
     """
+    conn = _get_connection(target)
     if dry_run:
+        # The preview runs the emptiness check this docstring has always
+        # promised. It used to return a green "wouldDelete" carrying a note that
+        # execution would re-check — the preview declining to answer the only
+        # question worth asking before a delete. (The real path below guards
+        # inside ops.delete_bucket, immediately before removing the bucket.)
+        ops.guard_delete_bucket(conn, bucket_name)
         return {"dryRun": True,
-                "wouldDelete": {"bucket": bucket_name,
-                                "note": "Execution re-checks emptiness and refuses "
-                                        "if any object/version/marker remains."}}
-    return ops.delete_bucket(_get_connection(target), bucket_name)
+                "wouldDelete": {"bucket": bucket_name, "verifiedEmpty": True}}
+    return ops.delete_bucket(conn, bucket_name)
 
 
 @mcp.tool()
@@ -306,11 +310,17 @@ def remove_incomplete_uploads(bucket_name: str, older_than_days: int = 7,
         dry_run: If True, preview the matching uploads without aborting.
         target: MinIO target name from config; omit for the default.
     """
+    conn = _get_connection(target)
     if dry_run:
+        # Counts the real candidates rather than pointing at another tool. The
+        # purge is irreversible, so "3 of 12" is the fact worth having before
+        # running it — and it comes from the same selection the purge uses, so
+        # it cannot disagree with what actually gets aborted.
+        uploads, victims = ops.select_stale_uploads(conn, bucket_name, older_than_days)
         return {"dryRun": True,
                 "wouldRemoveUploads": {"bucket": bucket_name,
                                        "olderThanDays": older_than_days,
-                                       "note": "Use incomplete_uploads_ls to see the "
-                                               "candidates first."}}
-    return ops.remove_incomplete_uploads(_get_connection(target), bucket_name,
+                                       "incompleteUploads": len(uploads),
+                                       "matchedForPurge": len(victims)}}
+    return ops.remove_incomplete_uploads(conn, bucket_name,
                                          older_than_days=older_than_days)

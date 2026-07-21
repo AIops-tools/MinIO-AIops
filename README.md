@@ -9,10 +9,9 @@ self-hosted deployments where MinIO actually lives. Talks to the **S3 API**
 (official `minio` SDK, SigV4), the **admin API** (bucket quota, server info),
 the unauthenticated **health endpoints** (`/minio/health/live|ready|cluster`),
 and the **cluster metrics endpoint** (`/minio/v2/metrics/cluster`, bearer-token
-or public auth) — with a **built-in governance harness**: unified audit log,
-policy engine, token/runaway budget guard, undo-token recording, and
-graduated-autonomy risk tiers. Self-contained: no external skill-family
-dependency.
+or public auth) — with a **built-in governance harness**: a unified audit log,
+a token/runaway budget guard, undo-token recording, and a descriptive risk
+tier on every audit row. Self-contained: no external skill-family dependency.
 
 ## What it does
 
@@ -78,44 +77,28 @@ Four flagship analyses, plus the guarded reads and writes around them:
 
 Totals: **31 tools — 22 read (incl. `undo_list`), 9 write (incl. `undo_apply`).**
 
-## Security: read-only mode
+## What this tool does, and does not, decide
 
-This tool is meant to be handed to an AI agent, so its safety story is enforced
-by the server rather than requested in a prompt:
+It delivers MinIO object-storage operations — reads and writes — accurately and
+efficiently, and records every one of them. It does **not** decide whether a
+write is allowed to happen. That is the agent's judgement, or the permission of
+the access key you connect it with: give the key a read-only IAM policy and the
+writes fail at the server — the place that actually owns the permission.
 
-```bash
-export MINIO_READ_ONLY=1
-```
+So there is no read-only switch, no policy file, no approval gate to configure.
+The one thing the tool guarantees is that nothing is silent: **every call, over
+MCP and over the CLI alike, lands an audit row** in `~/.minio-aiops/audit.db`,
+and reversible writes still capture their real prior state and record an inverse
+undo descriptor.
 
-With that set, the **9 write tools are never registered**. An MCP client
-lists **22 tools instead of 31** — the writes are not hidden, not
-gated behind a flag, and not merely refused when called. They are absent from
-the session. A model cannot invoke a tool it was never offered, and cannot be
-argued into one.
-
-That distinction is the whole point. A tool that exists but refuses still invites
-retry loops and "I'll describe the call instead" behaviour from smaller models,
-and it leaves a reviewer trusting a promise. An absent tool is a fact you can
-check: connect, list the tools, and see that the writes are not there.
-
-Enforcement is two layers deep, so the switch cannot be sidestepped by changing
-entry point:
-
-| Layer | What it does | Covers |
-|---|---|---|
-| `@governed_tool` harness | refuses every non-read operation outright | MCP, CLI, and in-process callers |
-| MCP registration | write tools are removed from `list_tools()` | anything speaking MCP |
-
-Read operations are unaffected, and every call is still audited to
-`~/.minio-aiops/audit.db`.
-
-> The read/write split is derived from each tool's declared `risk_level`, and a
-> test asserts that this never disagrees with the `[READ]`/`[WRITE]` tag in the
-> tool's own documentation — so a write can't quietly present itself as a read.
+> Each tool declares a `risk_level`, kept in agreement with its `[READ]`/`[WRITE]`
+> documentation tag by a test, and carried into the audit row as a descriptive
+> tier — so a reviewer can see at a glance that a row was a high-risk delete. It
+> is a label, not a gate.
 
 Running a smaller / local model? See
 [agent-guardrails.md](skills/minio-aiops/references/agent-guardrails.md) — it lists
-the guardrails this tool now enforces for you (so you don't spend prompt budget
+the guardrails this tool enforces for you (so you don't spend prompt budget
 restating them) and gives a ready-made system prompt for what's left.
 
 ## Quick start
@@ -181,14 +164,16 @@ migration warning).
 
 Every MCP tool passes through the bundled `@governed_tool` harness:
 
-- **Audit** — every call (params, result, status, duration, risk tier,
-  approver, rationale) is logged to `~/.minio-aiops/audit.db` (relocatable
-  via `MINIO_AIOPS_HOME`).
+- **Audit** — every call (params, result, status, duration, risk tier, and any
+  `MINIO_AUDIT_APPROVED_BY` / `MINIO_AUDIT_RATIONALE` annotations) is logged to
+  `~/.minio-aiops/audit.db` (relocatable via `MINIO_AIOPS_HOME`).
 - **Budget / runaway guard** — token and call budgets trip a circuit breaker.
-- **Risk tiers, secure by default** — with no `rules.yaml`, high-risk ops
-  (`bucket_delete`) **require a named approver**
-  (`MINIO_AUDIT_APPROVED_BY` / `MINIO_AUDIT_RATIONALE`); `init` seeds an
-  explicit, editable starter policy.
+  A safety backstop, not authorization.
+- **Risk-tier labelling** — each tool's declared `risk_level` is recorded on the
+  audit row as a descriptive tier (`bucket_delete` is high). It is a label for
+  the reviewer, not a gate: there is no read-only switch, policy file, or
+  approval gate, and `MINIO_AUDIT_APPROVED_BY` / `MINIO_AUDIT_RATIONALE` are
+  optional annotations recorded when set, never required.
 - **Undo recording** — reversible writes record an inverse descriptor built
   from the captured prior state.
 
@@ -205,11 +190,11 @@ Every MCP tool passes through the bundled `@governed_tool` harness:
   documented in `connection.py`.
 - **Verification status.** **Live-verified against a real single-node MinIO
   server (2026-07-19)**: connectivity, the reads, the exposure audit (it correctly
-  scored an anonymously-writable bucket `high` and named `PUBLIC_WRITE_POLICY`), the
-  governance loop (real `set_versioning` → undo restoring it to `Suspended`, the
-  correct S3 inverse), and read-only mode. **Distributed / multi-node MinIO is still
-  unverified** — healing was never exercised against a real degraded drive or erasure
-  set — as are lifecycle/quota writes and TLS endpoints. See
+  scored an anonymously-writable bucket `high` and named `PUBLIC_WRITE_POLICY`), and
+  the governance loop (real `set_versioning` → undo restoring it to `Suspended`, the
+  correct S3 inverse). **Distributed / multi-node MinIO is still unverified** —
+  healing was never exercised against a real degraded drive or erasure set — as are
+  lifecycle/quota writes and TLS endpoints. See
   [docs/VERIFICATION.md](docs/VERIFICATION.md); `minio-aiops doctor` is the fastest
   live check.
 

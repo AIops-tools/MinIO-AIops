@@ -20,7 +20,6 @@ from minio_aiops.cli._common import (
     console,
     double_confirm,
     dry_run_preview,
-    dry_run_print,
     get_connection,
     truncation_note,
 )
@@ -141,9 +140,10 @@ def bucket_versioning_set(
     from mcp_server.tools import bucket_writes as gov
 
     if dry_run:
-        dry_run_print(operation="set_versioning",
-                      api_call=f"PUT /{bucket}?versioning",
-                      parameters={"status": status})
+        dry_run_preview(
+            gov.set_versioning(bucket_name=bucket, status=status, dry_run=True, target=target),
+            operation="set_versioning", api_call=f"PUT /{bucket}?versioning",
+            parameters={"status": status})
         return
     console.print_json(json.dumps(
         gov.set_versioning(bucket_name=bucket, status=status, target=target)))
@@ -202,11 +202,13 @@ def bucket_lifecycle_set(
     from mcp_server.tools import bucket_writes as gov
 
     if dry_run:
-        dry_run_print(operation="set_lifecycle",
-                      api_call=f"PUT /{bucket}?lifecycle",
-                      parameters={"expire_days": expire_days,
-                                  "noncurrent_days": noncurrent_days,
-                                  "abort_days": abort_days, "prefix": prefix})
+        preview = gov.set_lifecycle(
+            bucket_name=bucket, expire_days=expire_days,
+            noncurrent_expire_days=noncurrent_days, abort_incomplete_days=abort_days,
+            prefix=prefix, dry_run=True, target=target)
+        dry_run_preview(
+            preview, operation="set_lifecycle", api_call=f"PUT /{bucket}?lifecycle",
+            parameters=preview.get("wouldSetLifecycle", {}))
         return
     console.print_json(json.dumps(gov.set_lifecycle(
         bucket_name=bucket, expire_days=expire_days,
@@ -226,9 +228,12 @@ def bucket_quota_set(
     from mcp_server.tools import bucket_writes as gov
 
     if dry_run:
-        dry_run_print(operation="set_bucket_quota",
-                      api_call=f"PUT /minio/admin/v3/set-bucket-quota?bucket={bucket}",
-                      parameters={"size_bytes": size_bytes})
+        dry_run_preview(
+            gov.set_bucket_quota(bucket_name=bucket, size_bytes=size_bytes,
+                                 dry_run=True, target=target),
+            operation="set_bucket_quota",
+            api_call=f"PUT /minio/admin/v3/set-bucket-quota?bucket={bucket}",
+            parameters={"size_bytes": size_bytes})
         return
     console.print_json(json.dumps(
         gov.set_bucket_quota(bucket_name=bucket, size_bytes=size_bytes, target=target)))
@@ -248,9 +253,15 @@ def bucket_purge_uploads(
     from mcp_server.tools import bucket_writes as gov
 
     if dry_run:
-        dry_run_print(operation="remove_incomplete_uploads",
-                      api_call=f"DELETE /{bucket}/<object>?uploadId=<id> (per upload)",
-                      parameters={"older_than_days": older_than_days})
+        # The preview carries the real candidate count ("matched 3 of 12"), which
+        # is what you want before an irreversible purge — not a restatement of
+        # the flag you just typed.
+        preview = gov.remove_incomplete_uploads(
+            bucket_name=bucket, older_than_days=older_than_days, dry_run=True, target=target)
+        dry_run_preview(
+            preview, operation="remove_incomplete_uploads",
+            api_call=f"DELETE /{bucket}/<object>?uploadId=<id> (per upload)",
+            parameters=preview.get("wouldRemoveUploads", {}))
         return
     double_confirm("purge incomplete uploads in", bucket)
     console.print_json(json.dumps(gov.remove_incomplete_uploads(
@@ -268,8 +279,13 @@ def bucket_delete(
     from mcp_server.tools import bucket_writes as gov
 
     if dry_run:
-        dry_run_print(operation="bucket_delete", api_call=f"DELETE /{bucket}",
-                      parameters={"note": "refused unless empty"})
+        # Through the governed twin, which runs the emptiness check: a preview
+        # of a delete that is about to be refused must say so. "refused unless
+        # empty" was the CLI declining to answer the only question that matters.
+        dry_run_preview(
+            gov.bucket_delete(bucket_name=bucket, dry_run=True, target=target),
+            operation="bucket_delete", api_call=f"DELETE /{bucket}",
+            parameters={"verifiedEmpty": True})
         return
     double_confirm("delete bucket", bucket)
     console.print_json(json.dumps(gov.bucket_delete(bucket_name=bucket, target=target)))

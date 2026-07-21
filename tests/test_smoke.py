@@ -301,25 +301,54 @@ def test_set_versioning_captures_prior_and_records_undo(monkeypatch):
 
 
 @pytest.mark.unit
-def test_bucket_delete_dry_run_does_not_mutate(monkeypatch):
+def test_bucket_delete_dry_run_checks_emptiness_but_does_not_mutate(monkeypatch):
+    """A dry-run MAY read; it must never write.
+
+    The emptiness check IS the read: without it the preview cannot say whether
+    the delete would be refused, which is the only question worth asking before
+    a delete. It used to skip the check and return a green "wouldDelete" with a
+    note promising execution would re-check — the preview declining to answer.
+    """
     from mcp_server.tools import bucket_writes as w
 
     conn = MagicMock(name="conn")
+    conn.is_bucket_empty.return_value = True
     monkeypatch.setattr(w, "_get_connection", lambda target=None: conn)
     result = w.bucket_delete(bucket_name="data-bkt", dry_run=True)
     assert result["dryRun"] is True
-    conn.remove_bucket.assert_not_called()
-    conn.is_bucket_empty.assert_not_called()  # dry-run makes no client call at all
+    assert result["wouldDelete"]["verifiedEmpty"] is True
+    conn.is_bucket_empty.assert_called_once_with("data-bkt")
+    conn.remove_bucket.assert_not_called()  # the one thing a dry-run may never do
 
 
 @pytest.mark.unit
-def test_cli_bucket_delete_dry_run_gates():
+def test_bucket_delete_dry_run_refuses_a_bucket_that_still_holds_data(monkeypatch):
+    """The refusal reaches the preview, so it can never show green then fail."""
+    from mcp_server.tools import bucket_writes as w
+
+    conn = MagicMock(name="conn")
+    conn.is_bucket_empty.return_value = False
+    monkeypatch.setattr(w, "_get_connection", lambda target=None: conn)
+    result = w.bucket_delete(bucket_name="data-bkt", dry_run=True)
+    assert "error" in result
+    assert "is not empty" in result["error"]
+    conn.remove_bucket.assert_not_called()
+
+
+@pytest.mark.unit
+def test_cli_bucket_delete_dry_run_gates(monkeypatch):
+    from mcp_server.tools import bucket_writes as w
     from minio_aiops.cli import app
+
+    conn = MagicMock(name="conn")
+    conn.is_bucket_empty.return_value = True
+    monkeypatch.setattr(w, "_get_connection", lambda target=None: conn)
 
     runner = CliRunner()
     result = runner.invoke(app, ["bucket", "delete", "data-bkt", "--dry-run"])
-    assert result.exit_code == 0
+    assert result.exit_code == 0, result.output
     assert "DRY-RUN" in result.output
+    conn.remove_bucket.assert_not_called()
 
 
 @pytest.mark.unit
@@ -332,3 +361,33 @@ def test_set_bucket_policy_captures_prior():
     assert out["action"] == "set_bucket_policy"
     assert out["priorState"]["policyJson"].startswith('{"Version"')
     conn.set_bucket_policy.assert_called_once_with("data-bkt", '{"Statement": []}')
+
+
+@pytest.mark.unit
+def test_risk_level_agrees_with_read_write_docstring_tag():
+    """The two write-markers must never drift apart.
+
+    A tool's ``risk_level`` decides its audit tier and whether it gets dry-run /
+    undo handling; its ``[READ]``/``[WRITE]`` docstring tag is what the docs and
+    capability tables are built from. If a ``[WRITE]`` were left ``risk_level=low``
+    it would be audited as a read and skip the write machinery — this test caught
+    16 such mislabels line-wide once, so it is kept even though read-only mode
+    (its original motivation) is gone.
+    """
+    from mcp_server import server
+
+    untagged, mismatched = [], []
+    for name, tool in server.mcp._tool_manager._tools.items():
+        doc = (tool.fn.__doc__ or "").lstrip()
+        if doc.startswith("[READ]"):
+            tagged_as_read = True
+        elif doc.startswith("[WRITE]"):
+            tagged_as_read = False
+        else:
+            untagged.append(name)
+            continue
+        if tagged_as_read != (getattr(tool.fn, "_risk_level", "low") == "low"):
+            mismatched.append(name)
+
+    assert not untagged, f"tools missing a [READ]/[WRITE] docstring tag: {untagged}"
+    assert not mismatched, f"risk_level disagrees with the docstring tag: {mismatched}"

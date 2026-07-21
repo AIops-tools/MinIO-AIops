@@ -34,9 +34,7 @@ minio-aiops init
 The wizard prompts for: target name, host, port, **TLS** (default yes),
 **certificate verification** (default yes — answer No only for self-signed lab
 certs), optional region, access key, secret key (hidden → encrypted store),
-and whether the metrics endpoint is public. It also seeds a starter
-`~/.minio-aiops/rules.yaml` (high-risk writes require a named approver) —
-never overwriting an operator-authored file.
+and whether the metrics endpoint is public.
 
 Resulting `~/.minio-aiops/config.yaml` (non-secret only):
 
@@ -91,11 +89,13 @@ authenticated `ListBuckets` (proves the key pair), and metrics reachability
 ## 7. Governance state
 
 Everything lives under `~/.minio-aiops/` (relocatable via
-`MINIO_AIOPS_HOME`): `audit.db` (every call), `undo.db` (inverse descriptors
-for reversible writes), `rules.yaml` (policy: deny rules, maintenance windows,
-risk tiers). High-risk writes (`bucket_delete`) need
-`MINIO_AUDIT_APPROVED_BY` (+ `MINIO_AUDIT_RATIONALE`) under the default
-policy.
+`MINIO_AIOPS_HOME`): `audit.db` (every call) and `undo.db` (inverse descriptors
+for reversible writes). The tool does not decide whether a write is permitted —
+that is the agent's judgement or the permission of the access key you connect
+with (a read-only IAM policy makes writes fail at the server); there is no
+read-only switch, policy file, or approval gate. `MINIO_AUDIT_APPROVED_BY`
+(+ `MINIO_AUDIT_RATIONALE`) are optional audit annotations, recorded when set
+and never required.
 
 ## Self-test with a local server
 

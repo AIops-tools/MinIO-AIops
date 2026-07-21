@@ -20,8 +20,6 @@ one erasure set, stripe size 4, write quorum 3).
 - Governance loop: `set_versioning` really enabled versioning on the live bucket,
   captured `Off` as `priorState`, and `undo_apply` restored it to `Suspended` —
   the correct S3 inverse, since a bucket cannot return to `Off`.
-- Read-only mode: 31 tools → 22, removing exactly the 8 bucket writes plus
-  `undo_apply` (correctly classed as a write, since it replays a mutation).
 
 ### Two real bugs found by the erasure-set run — both silent
 

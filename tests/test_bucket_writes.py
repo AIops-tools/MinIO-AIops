@@ -258,10 +258,38 @@ def test_quota_undo_restores_prior_and_replays(monkeypatch, recorded):
     replay_conn.set_bucket_quota.assert_called_once_with("data-bkt", 5000)
 
 
-def test_all_write_dry_runs_make_no_client_calls(monkeypatch):
+# Every connection method that changes server state. A dry-run may call none of
+# them; it may call anything else, because reading is how a preview finds out
+# what it is previewing.
+MUTATING_CLIENT_METHODS = {
+    "set_bucket_policy",
+    "delete_bucket_policy",
+    "set_bucket_versioning",
+    "set_bucket_lifecycle",
+    "set_bucket_lifecycle_xml",
+    "delete_bucket_lifecycle",
+    "set_bucket_quota",
+    "remove_bucket",
+    "abort_incomplete_upload",
+}
+
+
+def test_all_write_dry_runs_make_no_mutating_client_calls(monkeypatch):
+    """The surviving invariant: a dry_run MAY read; it must never write.
+
+    This used to assert ``conn.method_calls == []`` — no client call of any
+    kind. That encoded a rule the tool has since abandoned on purpose: a preview
+    that may not read cannot run the guards (is the bucket empty? does this
+    policy lock us out?), so it can only ever report a green banner for a call
+    that is about to be refused. Reads are now expected; mutations are still
+    forbidden, and that half is asserted harder than before — by name, against
+    the full list of state-changing client methods.
+    """
     from mcp_server.tools import bucket_writes as gov
 
     conn = _gov_conn(monkeypatch)
+    conn.is_bucket_empty.return_value = True
+    conn.list_incomplete_uploads.return_value = []
     for call in (
         lambda: gov.set_bucket_policy(bucket_name="b-1", policy_json=POLICY, dry_run=True),
         lambda: gov.delete_bucket_policy(bucket_name="b-1", dry_run=True),
@@ -275,4 +303,7 @@ def test_all_write_dry_runs_make_no_client_calls(monkeypatch):
         result = call()
         assert result.get("dryRun") is True, result
         assert "_undo_id" not in result
-    assert conn.method_calls == []
+    called = {name for name, _args, _kwargs in conn.method_calls}
+    assert called & MUTATING_CLIENT_METHODS == set(), (
+        f"a dry-run issued a mutating client call: {called & MUTATING_CLIENT_METHODS}"
+    )
