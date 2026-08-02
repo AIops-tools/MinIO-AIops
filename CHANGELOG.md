@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — 2026-08-02
+
+### Changed (BREAKING)
+- **Requires MCP SDK 2.0** (`mcp[cli]>=2.0,<3.0`). `mcp.server.fastmcp` no longer exists in 2.0; the server is now built with `MCPServer` and reports its package version in the stdio handshake.
+
+### Fixed
+- **`undo apply` works from the CLI.** Every write tool is imported lazily inside its own CLI command, so a CLI-driven undo ran in a process where the inverse tool was never registered and failed with "inverse tool is not registered" — for every write tool. Only the MCP entry point, which imports the whole server, worked. Found while live-verifying against a real cluster.
+- **An undetermined outcome is audited `unknown`, not `ok`.** The harness only classified a result as undetermined when the payload *also* carried an `error` key, so a write that looked successful but had not been confirmed was recorded as a success.
+- **`as_int` no longer round-trips integers through float64**, which cannot represent values above 2**53 exactly. A line-wide sweep found only one of six vendored copies had actually been fixed after the original precision bug. A bool is treated as non-numeric (`None`, matching this tool's unknown-vs-zero contract) rather than being returned unchanged — `bool` subclasses `int`.
+
+
 ## v0.5.0 — 2026-07-21
 
 ### Changed (BREAKING)
