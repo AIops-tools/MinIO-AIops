@@ -64,8 +64,10 @@ def as_int(value: Any) -> int | None:
     ``None`` stays ``None``: these come from ``.get()`` lookups where a missing
     sample is a real outcome, and an unknown count must not become ``0``.
     """
-    if value is None:
+    if value is None or isinstance(value, bool):  # bool subclasses int; not a quantity
         return None
+    if isinstance(value, int):
+        return value  # already exact — never round-trip through float64
     try:
         return int(float(value))
     except (TypeError, ValueError):
