@@ -391,14 +391,30 @@ def test_set_bucket_versioning_wraps_config():
     assert args[0] == "d" and args[1].status == "Enabled"
 
 
-def test_set_bucket_lifecycle_builds_all_three_rules():
+def test_set_bucket_lifecycle_builds_a_rule_per_expiry_knob():
     c = MagicMock()
     conn = MinioConnection(mk_target(), client=c)
-    conn.set_bucket_lifecycle(
-        "d", expire_days=30, noncurrent_expire_days=7, abort_incomplete_days=3, prefix="p/"
-    )
+    conn.set_bucket_lifecycle("d", expire_days=30, noncurrent_expire_days=7, prefix="p/")
     cfg = c.set_bucket_lifecycle.call_args.args[1]
-    assert len(cfg.rules) == 3
+    assert len(cfg.rules) == 2
+
+
+def test_set_bucket_lifecycle_has_no_abort_incomplete_knob():
+    """The abort-incomplete knob is gone because MinIO cannot honour it.
+
+    A lifecycle rule whose only action is AbortIncompleteMultipartUpload is
+    rejected with a schema-validation 400, and when the action rides along with
+    an expiration MinIO accepts the request but does not echo the action back on
+    GetBucketLifecycle — measured on RELEASE.2025-08 and RELEASE.2024-01, with
+    MinIO's own `mc ilm import`/`export` losing it as well. The previous version
+    of this test asserted three rules were built, which encoded the broken
+    behaviour as the spec. Abandoned uploads are reclaimed through
+    ``remove_incomplete_uploads`` (the S3 multipart abort), which is verifiable.
+    """
+    c = MagicMock()
+    conn = MinioConnection(mk_target(), client=c)
+    with pytest.raises(TypeError, match="abort_incomplete_days"):
+        conn.set_bucket_lifecycle("d", expire_days=30, abort_incomplete_days=3)
 
 
 def test_set_bucket_lifecycle_needs_at_least_one_knob():

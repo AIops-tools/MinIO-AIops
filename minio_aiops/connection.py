@@ -404,14 +404,22 @@ class MinioConnection:
         *,
         expire_days: int | None = None,
         noncurrent_expire_days: int | None = None,
-        abort_incomplete_days: int | None = None,
         prefix: str = "",
     ) -> None:
-        """Replace the bucket lifecycle with rules built from the given knobs."""
+        """Replace the bucket lifecycle with rules built from the given knobs.
+
+        There is deliberately no abort-incomplete-uploads knob: MinIO rejects a
+        lifecycle rule whose only action is ``AbortIncompleteMultipartUpload``
+        (schema-validation 400) and does not echo the action back on
+        GetBucketLifecycle even when it rides along with an expiration —
+        measured on RELEASE.2025-08 and RELEASE.2024-01, and MinIO's own ``mc``
+        loses it through an import/export round trip too. Reclaim abandoned
+        multipart uploads with ``remove_incomplete_uploads`` instead, which
+        aborts them through the S3 multipart API and is verifiable.
+        """
         try:
             from minio.commonconfig import ENABLED, Filter
             from minio.lifecycleconfig import (
-                AbortIncompleteMultipartUpload,
                 Expiration,
                 LifecycleConfig,
                 NoncurrentVersionExpiration,
@@ -439,21 +447,10 @@ class MinioConnection:
                         ),
                     )
                 )
-            if abort_incomplete_days is not None:
-                rules.append(
-                    Rule(
-                        ENABLED,
-                        rule_filter=Filter(prefix=prefix),
-                        rule_id="minio-aiops-abort-incomplete",
-                        abort_incomplete_multipart_upload=AbortIncompleteMultipartUpload(
-                            days_after_initiation=abort_incomplete_days
-                        ),
-                    )
-                )
             if not rules:
                 raise ValueError(
                     "set_bucket_lifecycle needs at least one of expire_days, "
-                    "noncurrent_expire_days, abort_incomplete_days."
+                    "noncurrent_expire_days."
                 )
             self.client.set_bucket_lifecycle(bucket, LifecycleConfig(rules))
         except MinioApiError:

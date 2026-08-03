@@ -145,9 +145,10 @@ def lifecycle_gap_analysis(conn: Any, limit: int = 100) -> dict:
                             f"abort-incomplete rule — their parts hold space invisibly."
                         ),
                         "suggestedAction": (
-                            "Reclaim now with remove_incomplete_uploads(bucket_name), "
-                            "then prevent recurrence: set_lifecycle(bucket_name, "
-                            "abort_incomplete_days=7)."
+                            "Reclaim with remove_incomplete_uploads(bucket_name); "
+                            "re-run it periodically. MinIO does not honour a "
+                            "lifecycle abort-incomplete rule, so there is no "
+                            "server-side rule that prevents recurrence."
                         ),
                         "incompleteUploads": len(uploads),
                         "abandonedUploads": len(abandoned),

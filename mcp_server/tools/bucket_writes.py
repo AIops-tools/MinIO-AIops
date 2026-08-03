@@ -185,16 +185,19 @@ def set_versioning(bucket_name: str, status: str, dry_run: bool = False,
 @governed_tool(risk_level="medium", undo=_lifecycle_undo)
 @tool_errors("dict")
 def set_lifecycle(bucket_name: str, expire_days: Optional[int] = None,
-                  noncurrent_expire_days: Optional[int] = None,
-                  abort_incomplete_days: Optional[int] = None, prefix: str = "",
+                  noncurrent_expire_days: Optional[int] = None, prefix: str = "",
                   lifecycle_xml: Optional[str] = None, dry_run: bool = False,
                   target: Optional[str] = None) -> dict:
     """[WRITE][risk=medium] Replace the bucket lifecycle. Reversible → prior config.
 
     Pass the day-count knobs (rules are built for you: current-version expiry,
-    noncurrent-version expiry, abort-incomplete-uploads), or lifecycle_xml to
-    apply a configuration verbatim (used by undo restores). REPLACES any
-    existing rules — the prior config is captured for undo.
+    noncurrent-version expiry), or lifecycle_xml to apply a configuration
+    verbatim (used by undo restores). REPLACES any existing rules — the prior
+    config is captured for undo.
+
+    Aborting abandoned multipart uploads is NOT available here: MinIO refuses a
+    lifecycle rule whose only action is that, and drops the action when it is
+    combined with an expiration. Use remove_incomplete_uploads instead.
 
     The undo restores the RULE, not the data: objects the rule expires before
     you undo are deleted, and putting the prior configuration back does not
@@ -204,7 +207,6 @@ def set_lifecycle(bucket_name: str, expire_days: Optional[int] = None,
         bucket_name: Bucket name (from bucket_ls).
         expire_days: Expire current objects after N days.
         noncurrent_expire_days: Expire noncurrent versions after N days.
-        abort_incomplete_days: Abort incomplete multipart uploads after N days.
         prefix: Optional key prefix the rules apply to (empty = whole bucket).
         lifecycle_xml: Full lifecycle configuration XML to apply verbatim.
         dry_run: If True, preview without applying.
@@ -215,13 +217,11 @@ def set_lifecycle(bucket_name: str, expire_days: Optional[int] = None,
                 "wouldSetLifecycle": {"bucket": bucket_name,
                                       "expireDays": expire_days,
                                       "noncurrentExpireDays": noncurrent_expire_days,
-                                      "abortIncompleteDays": abort_incomplete_days,
                                       "prefix": prefix,
                                       "verbatimXml": bool(lifecycle_xml)}}
     return ops.set_lifecycle(_get_connection(target), bucket_name,
                              expire_days=expire_days,
                              noncurrent_expire_days=noncurrent_expire_days,
-                             abort_incomplete_days=abort_incomplete_days,
                              prefix=prefix, lifecycle_xml=lifecycle_xml)
 
 

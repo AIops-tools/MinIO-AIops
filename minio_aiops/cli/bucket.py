@@ -190,10 +190,6 @@ def bucket_lifecycle_set(
         int | None,
         typer.Option("--noncurrent-days", help="Expire noncurrent versions after N days"),
     ] = None,
-    abort_days: Annotated[
-        int | None,
-        typer.Option("--abort-days", help="Abort incomplete uploads after N days"),
-    ] = None,
     prefix: Annotated[str, typer.Option("--prefix", help="Key prefix (empty = all)")] = "",
     target: TargetOption = None,
     dry_run: DryRunOption = False,
@@ -204,7 +200,7 @@ def bucket_lifecycle_set(
     if dry_run:
         preview = gov.set_lifecycle(
             bucket_name=bucket, expire_days=expire_days,
-            noncurrent_expire_days=noncurrent_days, abort_incomplete_days=abort_days,
+            noncurrent_expire_days=noncurrent_days,
             prefix=prefix, dry_run=True, target=target)
         dry_run_preview(
             preview, operation="set_lifecycle", api_call=f"PUT /{bucket}?lifecycle",
@@ -212,7 +208,7 @@ def bucket_lifecycle_set(
         return
     console.print_json(json.dumps(gov.set_lifecycle(
         bucket_name=bucket, expire_days=expire_days,
-        noncurrent_expire_days=noncurrent_days, abort_incomplete_days=abort_days,
+        noncurrent_expire_days=noncurrent_days,
         prefix=prefix, target=target)))
 
 

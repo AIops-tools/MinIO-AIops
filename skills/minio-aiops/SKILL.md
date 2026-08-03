@@ -94,7 +94,7 @@ Every write step accepts `--dry-run`; irreversible ones also double-confirm.
 3. `minio-aiops capacity usage` → the biggest buckets, largest first, so you know where the bytes live.
 4. `minio-aiops bucket ilm-gap` → how much of that is reclaimable: unbounded noncurrent versions and abandoned multipart uploads, with an estimate.
 5. Reclaim the abandoned uploads: `minio-aiops bucket purge-uploads <bucket> --older-than-days 7 --dry-run`, then re-run without `--dry-run` (double confirm — this one is irreversible, only uploads older than the window are aborted).
-6. Prevent recurrence: `minio-aiops bucket lifecycle-set <bucket> --noncurrent-days 30 --abort-days 7` (reversible — the prior lifecycle config is captured).
+6. Cap version growth: `minio-aiops bucket lifecycle-set <bucket> --noncurrent-days 30` (reversible — the prior lifecycle config is captured). Abandoned uploads have no server-side rule — MinIO does not honour a lifecycle abort-incomplete rule — so re-run `purge-uploads` periodically instead.
 7. `minio-aiops capacity rca` again to confirm the finding cleared.
 
 **Failure branch**: if `capacity rca` reports `DRIVES_OFFLINE` rather than genuine data growth, stop — do not delete anything. The space is not gone, it is unavailable. Go to recipe 3 and restore drive/erasure-set health first; purging data under a degraded erasure set removes redundancy you may need.

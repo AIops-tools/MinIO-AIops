@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Removed (BREAKING)
+- **`set_lifecycle`'s abort-incomplete-uploads knob is gone** (`--abort-days` on the CLI, `abort_incomplete_days` on the MCP tool and ops layers). MinIO cannot honour it: a lifecycle rule whose only action is `AbortIncompleteMultipartUpload` is refused with a schema-validation 400 — so the standalone rule this tool built **failed on every real MinIO server** — and combining `--abort-days` with `--expire-days` failed the whole request, taking the working knobs down with it. Even attached to an expiration rule (which the server accepts) MinIO does not echo the action back on GetBucketLifecycle; confirmed on `RELEASE.2025-08` and `RELEASE.2024-01`, with MinIO's own `mc ilm import`/`export` losing it too and `mc ilm rule add` offering no such option. Reclaim abandoned multipart uploads with `remove_incomplete_uploads` instead (the S3 multipart abort, which is verifiable); `ilm-gap`'s suggested action now says that rather than recommending the impossible rule. A unit test had encoded the broken three-rule shape as the spec and has been replaced.
+
 ### Added
 - **`usage_by_bucket` surfaces version and delete-marker totals.** On a versioned bucket `usedBytes` is version-inclusive while `objects` counts only current objects, so the two could look inconsistent (e.g. 118 bytes across "2 objects") with no way to see that the difference is noncurrent-version overhead. Each row now carries `versions` and `deleteMarkers` from `minio_bucket_usage_version_total` / `_deletemarker_total`, making the overhead a noncurrent-expiration lifecycle rule would reclaim visible. Verified against a real MinIO bucket holding 2 current objects across 4 versions.
 

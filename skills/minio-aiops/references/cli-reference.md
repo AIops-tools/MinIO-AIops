@@ -46,7 +46,7 @@ minio-aiops bucket uploads <bucket> # incomplete multipart uploads
 ```bash
 minio-aiops bucket versioning-set <bucket> Enabled|Suspended
 minio-aiops bucket policy-set <bucket> --file policy.json
-minio-aiops bucket lifecycle-set <bucket> --expire-days 90 --noncurrent-days 30 --abort-days 7 [--prefix logs/]
+minio-aiops bucket lifecycle-set <bucket> --expire-days 90 --noncurrent-days 30 [--prefix logs/]
 minio-aiops bucket quota-set <bucket> <size-bytes>     # 0 clears
 minio-aiops bucket purge-uploads <bucket> [--older-than-days 7]   # double confirm
 minio-aiops bucket delete <bucket>                     # double confirm; refused unless empty

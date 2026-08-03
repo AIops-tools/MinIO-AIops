@@ -198,7 +198,6 @@ def set_lifecycle(
     *,
     expire_days: int | None = None,
     noncurrent_expire_days: int | None = None,
-    abort_incomplete_days: int | None = None,
     prefix: str = "",
     lifecycle_xml: str | None = None,
 ) -> dict:
@@ -206,6 +205,10 @@ def set_lifecycle(
 
     Either pass the day-count knobs (rules are built for you) or
     ``lifecycle_xml`` to apply a config verbatim (the undo-restore path).
+
+    Aborting abandoned multipart uploads is NOT offered here: MinIO refuses a
+    rule whose only action is that, and silently drops the action when it rides
+    along with an expiration. Use ``remove_incomplete_uploads`` instead.
 
     The undo restores the RULE, not the data. Between this call and the undo,
     MinIO applies the rule: objects it expires are deleted, and putting the
@@ -217,7 +220,6 @@ def set_lifecycle(
     for name, value in (
         ("expire_days", expire_days),
         ("noncurrent_expire_days", noncurrent_expire_days),
-        ("abort_incomplete_days", abort_incomplete_days),
     ):
         if value is not None and (not isinstance(value, int) or value < 1):
             raise ValueError(f"{name} must be a positive integer (got {value!r}).")
@@ -229,7 +231,6 @@ def set_lifecycle(
             bucket,
             expire_days=expire_days,
             noncurrent_expire_days=noncurrent_expire_days,
-            abort_incomplete_days=abort_incomplete_days,
             prefix=prefix,
         )
     return {
@@ -238,7 +239,6 @@ def set_lifecycle(
         "applied": {
             "expireDays": expire_days,
             "noncurrentExpireDays": noncurrent_expire_days,
-            "abortIncompleteDays": abort_incomplete_days,
             "prefix": s(prefix, 120),
             "verbatimXml": bool(lifecycle_xml),
         },

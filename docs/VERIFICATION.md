@@ -62,18 +62,26 @@ as `1500000.0` / `3.0`; these are now integers, with absent staying `null`.
 - ~~**Lifecycle writes** (`set_lifecycle`)~~ — **`--expire-days` and
   `--noncurrent-days` verified 2026-08-03** (rules applied and round-tripped via
   `mc ilm rule ls`, undo restores the prior config XML).
-  **`--abort-days` was found completely broken and is a pending product
-  decision (not fixed here).** MinIO **rejects any lifecycle rule whose only
-  action is `AbortIncompleteMultipartUpload`** (schema-validation 400), so the
-  tool's standalone abort rule failed on every real MinIO — and using
-  `--abort-days` alongside `--expire-days` failed the *whole* request. Worse,
-  even when the abort action is attached to an expiration rule (which the server
-  accepts), **MinIO does not echo it back on GetBucketLifecycle** — confirmed on
-  both `RELEASE.2025-08` and `RELEASE.2024-01`, and MinIO's own `mc ilm import`
-  → `mc ilm export` loses it too, and `mc ilm rule add` exposes no abort knob at
-  all. So the knob cannot be honored round-trippably through the S3 lifecycle
-  API. Options on the table: deprecate the knob, or keep it with honest
-  read-back verification. Awaiting decision before changing code.
+  Undo restores the prior configuration (verified: after undo the bucket had no
+  lifecycle configuration again, its pre-write state).
+  **`--abort-days` was found completely broken and has been REMOVED.** MinIO
+  **rejects any lifecycle rule whose only action is
+  `AbortIncompleteMultipartUpload`** (schema-validation 400), so the tool's
+  standalone abort rule failed on every real MinIO — and using `--abort-days`
+  alongside `--expire-days` failed the *whole* request, taking the working knobs
+  down with it. Worse, even when the abort action is attached to an expiration
+  rule (which the server accepts), **MinIO does not echo it back on
+  GetBucketLifecycle** — confirmed on both `RELEASE.2025-08` and
+  `RELEASE.2024-01`, MinIO's own `mc ilm import` → `mc ilm export` loses it too,
+  and `mc ilm rule add` exposes no abort knob at all. The knob therefore cannot
+  be honoured round-trippably through the S3 lifecycle API, so it is gone from
+  the CLI, the MCP tool and the ops/connection layers rather than left to look
+  like it works. Abandoned uploads are reclaimed with `remove_incomplete_uploads`
+  (the S3 multipart abort), which is verifiable; `ilm-gap`'s suggested action now
+  says so instead of recommending the impossible rule.
+  **A mock had encoded the defect as the spec**: `test_set_bucket_lifecycle_builds_all_three_rules`
+  asserted the three-rule shape MinIO rejects. Replaced with a two-rule assertion
+  plus a test pinning the knob's absence and the reason.
 - ~~**Versioned-object accounting** in `capacity`~~ — **verified 2026-08-03** on a
   bucket with noncurrent versions (obj.txt at 3 versions + single.txt). The
   numbers are accurate: `usedBytes: 118` is version-inclusive (matches MinIO's
