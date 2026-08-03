@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.7.0 — 2026-08-03
 
 ### Fixed
 - **A cluster-wide gauge was double-counted, reporting 8 nodes online on a 4-node cluster.** 29 metric names are exported by **both** `/cluster` and `/node`, including `minio_cluster_nodes_online_total`, and the two endpoints were concatenated — so every aggregate over an overlapping name doubled. The merge now skips a `(name, labels)` series it has already absorbed, which cannot drop real data because two genuinely different series never share both. Measured on a real 4-node distributed MinIO.
