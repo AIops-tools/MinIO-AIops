@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **`usage_by_bucket` surfaces version and delete-marker totals.** On a versioned bucket `usedBytes` is version-inclusive while `objects` counts only current objects, so the two could look inconsistent (e.g. 118 bytes across "2 objects") with no way to see that the difference is noncurrent-version overhead. Each row now carries `versions` and `deleteMarkers` from `minio_bucket_usage_version_total` / `_deletemarker_total`, making the overhead a noncurrent-expiration lifecycle rule would reclaim visible. Verified against a real MinIO bucket holding 2 current objects across 4 versions.
+
 ## v0.7.0 — 2026-08-03
 
 ### Fixed

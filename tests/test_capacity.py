@@ -38,6 +38,13 @@ def _metrics(*, used_ratio=0.5, drives=None, offline=0.0, nodes_offline=0.0,
         m["minio_bucket_usage_object_total"] = [
             {"labels": {"bucket": b}, "value": 10.0} for b in bucket_usage
         ]
+        # versions >= objects on a versioned bucket (current + noncurrent)
+        m["minio_bucket_usage_version_total"] = [
+            {"labels": {"bucket": b}, "value": 17.0} for b in bucket_usage
+        ]
+        m["minio_bucket_usage_deletemarker_total"] = [
+            {"labels": {"bucket": b}, "value": 2.0} for b in bucket_usage
+        ]
     return m
 
 
@@ -84,7 +91,13 @@ def test_usage_by_bucket_sorted_and_limited():
     assert result["returned"] == 2
     assert result["limit"] == 2
     assert result["truncated"] is True
-    assert result["buckets"][0]["objects"] == 10.0
+    top = result["buckets"][0]
+    assert top["objects"] == 10.0
+    # version + delete-marker overhead is surfaced so noncurrent-version bloat on
+    # a versioned bucket is not hidden inside the version-inclusive usedBytes;
+    # counts stay integers (bug class #2).
+    assert top["versions"] == 17 and isinstance(top["versions"], int)
+    assert top["deleteMarkers"] == 2 and isinstance(top["deleteMarkers"], int)
 
 
 def test_usage_by_bucket_resilient():

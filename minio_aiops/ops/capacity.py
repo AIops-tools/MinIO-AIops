@@ -31,6 +31,8 @@ M_DRIVE_USED = "minio_node_drive_used_bytes"
 M_DRIVE_TOTAL = "minio_node_drive_total_bytes"
 M_BUCKET_USAGE = "minio_bucket_usage_total_bytes"
 M_BUCKET_OBJECTS = "minio_bucket_usage_object_total"
+M_BUCKET_VERSIONS = "minio_bucket_usage_version_total"
+M_BUCKET_DELETEMARKERS = "minio_bucket_usage_deletemarker_total"
 
 
 def _drive_key(sample: dict) -> str:
@@ -184,7 +186,7 @@ def capacity_rca(conn: Any) -> dict:
 
 
 def usage_by_bucket(conn: Any, limit: int = 25) -> dict:
-    """[READ] Per-bucket usage (bytes + objects), biggest first, in an envelope.
+    """[READ] Per-bucket usage (bytes, objects, versions), biggest first, in an envelope.
 
     Returns::
 
@@ -204,8 +206,22 @@ def usage_by_bucket(conn: Any, limit: int = 25) -> dict:
         return {"buckets": [], "returned": 0, "limit": requested, "truncated": False}
     usage = by_label(metrics, M_BUCKET_USAGE, "bucket")
     objects = by_label(metrics, M_BUCKET_OBJECTS, "bucket")
+    versions = by_label(metrics, M_BUCKET_VERSIONS, "bucket")
+    delete_markers = by_label(metrics, M_BUCKET_DELETEMARKERS, "bucket")
+    # ``usedBytes`` is version-inclusive (matches MinIO's total_bytes) while
+    # ``objects`` counts current objects only — so on a versioned bucket the two
+    # can look inconsistent (118 bytes across "2 objects"). Surface the version
+    # and delete-marker totals so noncurrent-version overhead — the thing a
+    # noncurrent-expiration lifecycle rule would reclaim — is visible rather than
+    # hidden inside usedBytes.
     rows = [
-        {"bucket": s(name), "usedBytes": as_int(val), "objects": as_int(objects.get(name))}
+        {
+            "bucket": s(name),
+            "usedBytes": as_int(val),
+            "objects": as_int(objects.get(name)),
+            "versions": as_int(versions.get(name)),
+            "deleteMarkers": as_int(delete_markers.get(name)),
+        }
         for name, val in usage.items()
     ]
     rows.sort(key=lambda r: -(r["usedBytes"] or 0))

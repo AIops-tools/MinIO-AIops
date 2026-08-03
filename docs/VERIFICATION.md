@@ -55,7 +55,32 @@ as `1500000.0` / `3.0`; these are now integers, with absent staying `null`.
   `minio_heal_*` counters (objects scanned and healed climbing while the
   deployment repaired itself), which is the state the previous round could only
   report as `null`.
-- **Lifecycle and quota writes** (`set_lifecycle`, `set_bucket_quota`) and their
-  undo paths.
-- **Versioned-object accounting** in `capacity rca` (needs noncurrent versions).
+- ~~**Quota writes** (`set_bucket_quota`) and undo~~ — **verified 2026-08-03**
+  against a real MinIO (Docker). `quota-set vbucket 5242880` set a 5 MiB hard
+  quota (`mc quota info` confirmed), captured `quotaBytes: 0` as `priorState`,
+  and `undo apply` cleared it back to `0 B` (`mc` confirmed). Audit rows written.
+- ~~**Lifecycle writes** (`set_lifecycle`)~~ — **`--expire-days` and
+  `--noncurrent-days` verified 2026-08-03** (rules applied and round-tripped via
+  `mc ilm rule ls`, undo restores the prior config XML).
+  **`--abort-days` was found completely broken and is a pending product
+  decision (not fixed here).** MinIO **rejects any lifecycle rule whose only
+  action is `AbortIncompleteMultipartUpload`** (schema-validation 400), so the
+  tool's standalone abort rule failed on every real MinIO — and using
+  `--abort-days` alongside `--expire-days` failed the *whole* request. Worse,
+  even when the abort action is attached to an expiration rule (which the server
+  accepts), **MinIO does not echo it back on GetBucketLifecycle** — confirmed on
+  both `RELEASE.2025-08` and `RELEASE.2024-01`, and MinIO's own `mc ilm import`
+  → `mc ilm export` loses it too, and `mc ilm rule add` exposes no abort knob at
+  all. So the knob cannot be honored round-trippably through the S3 lifecycle
+  API. Options on the table: deprecate the knob, or keep it with honest
+  read-back verification. Awaiting decision before changing code.
+- ~~**Versioned-object accounting** in `capacity`~~ — **verified 2026-08-03** on a
+  bucket with noncurrent versions (obj.txt at 3 versions + single.txt). The
+  numbers are accurate: `usedBytes: 118` is version-inclusive (matches MinIO's
+  `total_bytes` and `mc du --versions`), `objects: 2` is the current-object count
+  (matches `object_total`). **Enhancement made this run**: `usage_by_bucket` now
+  also surfaces `versions` (4) and `deleteMarkers` (0) from
+  `minio_bucket_usage_version_total` / `_deletemarker_total`, so noncurrent-version
+  overhead — the thing a noncurrent-expiration rule reclaims — is visible instead
+  of hidden inside the version-inclusive `usedBytes`.
 - **TLS-secured endpoints** — both verified instances ran plaintext on a lab port.
