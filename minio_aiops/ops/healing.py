@@ -161,12 +161,15 @@ def healing_health(conn: Any) -> dict:
 
     return {
         "healthy": not any(f["severity"] in ("critical", "warning") for f in findings),
-        "clusterHealthStatus": first_value(metrics, M_HEALTH_STATUS),
+        # Counts, not ratios: a gauge parses to float, and "4.0 objects scanned"
+        # is the int-as-float class this line has fixed elsewhere. Only appears
+        # once a heal has actually run — verified by taking a node offline.
+        "clusterHealthStatus": as_int(first_value(metrics, M_HEALTH_STATUS)),
         "drivesOffline": int(sum_values(metrics, M_DRIVES_OFFLINE) or 0),
-        "healBacklogObjects": backlog,
-        "healObjectsScanned": scanned,
-        "healObjectsHealed": healed,
-        "healErrors": errors,
+        "healBacklogObjects": as_int(backlog),
+        "healObjectsScanned": as_int(scanned),
+        "healObjectsHealed": as_int(healed),
+        "healErrors": as_int(errors),
         "erasureSets": sets,
         "findings": findings,
     }
@@ -214,7 +217,27 @@ def drive_status(conn: Any) -> dict:
             }
         )
     rows.sort(key=lambda r: -(r["usedRatio"] or 0))
-    return {"drives": rows, "returned": len(rows), "error": None}
+    # ``minio_node_drive_*`` is scraped from ONE server and describes only that
+    # server's drives, while ``minio_cluster_drive_online_total`` — from the same
+    # scrape — counts the whole deployment. On a real 4-node distributed MinIO
+    # this listed 1 drive and said returned: 1, with nothing to distinguish "this
+    # server has one drive" from "three more servers were never looked at". The
+    # scope marker travels with the rows.
+    cluster_drives = as_int(sum_values(metrics, "minio_cluster_drive_online_total"))
+    out = {
+        "drives": rows,
+        "returned": len(rows),
+        "scope": "node",
+        "clusterDrivesOnline": cluster_drives,
+        "error": None,
+    }
+    if cluster_drives and cluster_drives > len(rows):
+        out["note"] = (
+            f"Per-drive detail covers only the server queried here ({len(rows)} "
+            f"drive(s)); the deployment reports {cluster_drives} drives online. "
+            f"Query each server for the rest."
+        )
+    return out
 
 
 def node_status(conn: Any) -> dict:
@@ -230,15 +253,20 @@ def node_status(conn: Any) -> dict:
     for sample in metrics.get(M_DRIVE_ONLINE_NODE) or []:
         per_node_online[sample["labels"].get("server", "?")] = sample["value"]
     servers = sorted(set(per_node_offline) | set(per_node_online))
+    # Node and drive counts are counts: as_int, not the float a gauge parses to
+    # (a deployment reporting "8.0 nodes online" is the int-as-float class).
     return {
-        "nodesOnline": sum_values(metrics, "minio_cluster_nodes_online_total"),
-        "nodesOffline": sum_values(metrics, "minio_cluster_nodes_offline_total"),
+        "nodesOnline": as_int(sum_values(metrics, "minio_cluster_nodes_online_total")),
+        "nodesOffline": as_int(sum_values(metrics, "minio_cluster_nodes_offline_total")),
         "nodes": [
             {
                 "server": s(server),
-                "drivesOnline": per_node_online.get(server),
+                "drivesOnline": as_int(per_node_online.get(server)),
                 "drivesOffline": as_int(per_node_offline.get(server)),
             }
             for server in servers
         ],
+        # Per-node rows come from this server's own /node scrape, so a
+        # distributed deployment lists one row while nodesOnline counts them all.
+        "scope": "node",
     }

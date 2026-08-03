@@ -41,12 +41,20 @@ as `1500000.0` / `3.0`; these are now integers, with absent staying `null`.
 
 ## Not yet live-verified ⚠️
 
-- **Multi-node (distributed) MinIO** — the erasure set was verified on a
-  single node with four drives. Cross-node healing, node-down handling, and
-  `heal nodes` against a genuinely offline peer are still untested.
-- **Actual healing**: the `minio_heal_*` counters only appear once a heal has run;
-  they read `null` here (correctly — unknown, not zero). Nothing has been verified
-  against a real degraded drive being rebuilt.
+- ~~**Multi-node (distributed) MinIO**~~ — **closed 2026-08-03 against a real
+  4-node distributed deployment, and it found three defects** (all fixed):
+  `minio_cluster_nodes_online_total` is exported by both `/cluster` and
+  `/node`, so summing the concatenated endpoints reported **8 nodes online on a
+  4-node cluster** (29 metric names overlap; the merge now de-duplicates by
+  `(name, labels)`); `heal drives` listed **1 of 4 drives** as `returned: 1`
+  with no way to tell a one-drive deployment from three unseen servers; and the
+  heal counters rendered as floats. **Node-down handling is correct**: with one
+  node stopped, `nodesOnline: 3 / nodesOffline: 1`, `drivesOffline: 1`, and the
+  erasure set reported 3 online drives against a read quorum of 2.
+- ~~**Actual healing**~~ — **closed 2026-08-03**: stopping a node produced real
+  `minio_heal_*` counters (objects scanned and healed climbing while the
+  deployment repaired itself), which is the state the previous round could only
+  report as `null`.
 - **Lifecycle and quota writes** (`set_lifecycle`, `set_bucket_quota`) and their
   undo paths.
 - **Versioned-object accounting** in `capacity rca` (needs noncurrent versions).

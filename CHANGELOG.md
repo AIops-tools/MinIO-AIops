@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### Fixed
+- **A cluster-wide gauge was double-counted, reporting 8 nodes online on a 4-node cluster.** 29 metric names are exported by **both** `/cluster` and `/node`, including `minio_cluster_nodes_online_total`, and the two endpoints were concatenated — so every aggregate over an overlapping name doubled. The merge now skips a `(name, labels)` series it has already absorbed, which cannot drop real data because two genuinely different series never share both. Measured on a real 4-node distributed MinIO.
+- **Per-drive and per-node listings say they cover one server.** `heal drives` on that same 4-node cluster listed **1 drive** and reported `returned: 1`, indistinguishable from "this deployment has one drive". `heal drives` and `heal nodes` now carry `scope: "node"`, and drives additionally reports `clusterDrivesOnline` with a note when the deployment has more drives than the queried server can see.
+- **Heal counters are ints.** `healObjectsScanned`, `healObjectsHealed`, `healBacklogObjects`, `healErrors` and `clusterHealthStatus` rendered as floats (`4.0` objects scanned) while `drivesOffline` in the same payload was an int.
 - **`undo apply` replays against the target the original write ran on.** It dispatched the inverse against whatever target the *caller* named — in practice the config's first entry — while the write's own target sat unused in the undo record. On a multi-target config the inverse therefore ran against the wrong host; it only looks harmless because the resource usually is not there, but two hosts holding the same name and the inverse **succeeds on the wrong one, silently**. An explicitly named target still wins. Line-wide: all 24 copies had the identical defect. Caught live in container-host-aiops, where a stop recorded against a Podman target replayed against a Portainer one.
 
 ## v0.6.0 — 2026-08-02

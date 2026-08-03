@@ -110,3 +110,49 @@ def test_node_status_aggregates_per_server():
     }
     out = ops.node_status(_conn(m))
     assert out["nodes"] == [{"server": "m1", "drivesOnline": 4.0, "drivesOffline": 1.0}]
+
+
+@pytest.mark.unit
+def test_node_status_does_not_double_count_a_cluster_gauge():
+    """29 metric names are exported by BOTH /cluster and /node.
+
+    ``minio_cluster_nodes_online_total`` is one of them, so concatenating the two
+    endpoints listed it twice and summing gave **8 nodes online on a real 4-node
+    cluster**. The merge now drops a (name, labels) pair it has already seen.
+    """
+    from minio_aiops.connection import MinioConnection
+
+    exposition = (
+        "# TYPE minio_cluster_nodes_online_total gauge\n"
+        'minio_cluster_nodes_online_total{server="m1:9000"} 4\n'
+    )
+    conn = MagicMock(spec=MinioConnection)
+    conn._scrape.return_value = exposition
+    merged = MinioConnection.metrics(conn)
+
+    assert len(merged["minio_cluster_nodes_online_total"]) == 1
+    assert merged["minio_cluster_nodes_online_total"][0]["value"] == 4.0
+
+
+@pytest.mark.unit
+def test_drive_status_says_it_only_saw_one_server():
+    """Per-drive detail is per-server; the cluster-wide count is not.
+
+    On a real 4-node distributed MinIO this listed one drive and said
+    ``returned: 1`` with nothing to distinguish "this server has one drive" from
+    "three more servers were never looked at".
+    """
+    conn = MagicMock()
+    conn.metrics.return_value = {
+        "minio_node_drive_total_bytes": [
+            {"labels": {"server": "m1:9000", "drive": "/data"}, "value": 100.0}],
+        "minio_node_drive_free_bytes": [
+            {"labels": {"server": "m1:9000", "drive": "/data"}, "value": 40.0}],
+        "minio_cluster_drive_online_total": [
+            {"labels": {"server": "m1:9000"}, "value": 4.0}],
+    }
+    out = ops.drive_status(conn)
+    assert out["returned"] == 1
+    assert out["scope"] == "node"
+    assert out["clusterDrivesOnline"] == 4
+    assert "4 drives online" in out["note"]

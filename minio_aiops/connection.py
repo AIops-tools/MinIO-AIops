@@ -613,15 +613,34 @@ class MinioConnection:
         from minio_aiops.prom import parse_metrics_text
 
         merged: dict[str, list[dict]] = {}
+        seen: set[tuple] = set()
+
+        def _absorb(text: str) -> None:
+            """Merge one endpoint's exposition, skipping series already present.
+
+            29 metric names are exported by BOTH ``/cluster`` and ``/node`` —
+            including ``minio_cluster_nodes_online_total`` — so concatenating the
+            endpoints listed every one of them twice, and any aggregate over them
+            doubled. Measured on a real 4-node distributed MinIO, which reported
+            **8 nodes online**. A series is identified by (name, labels): two
+            genuinely different series never collide, so this drops duplicates
+            without ever dropping data.
+            """
+            for name, samples in parse_metrics_text(text).items():
+                for sample in samples:
+                    key = (name, tuple(sorted((sample.get("labels") or {}).items())))
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    merged.setdefault(name, []).append(sample)
+
         for endpoint in (_METRICS_CLUSTER, _METRICS_NODE):
-            for name, samples in parse_metrics_text(self._scrape(endpoint)).items():
-                merged.setdefault(name, []).extend(samples)
+            _absorb(self._scrape(endpoint))
         try:
             bucket_text = self._scrape(_METRICS_BUCKET)
         except MinioApiError:
             return merged
-        for name, samples in parse_metrics_text(bucket_text).items():
-            merged.setdefault(name, []).extend(samples)
+        _absorb(bucket_text)
         return merged
 
     def close(self) -> None:
