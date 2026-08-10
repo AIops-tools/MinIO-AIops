@@ -39,6 +39,60 @@ one erasure set, stripe size 4, write quorum 3).
 Also: Prometheus values are float on the wire, so byte and object counts rendered
 as `1500000.0` / `3.0`; these are now integers, with absent staying `null`.
 
+## Object lock / WORM ✅ — live-verified 2026-08-11 (RELEASE.2025-09-07)
+
+The whole object-lock surface (8 tools) was exercised against a real MinIO, with
+**`mc` as ground truth** rather than the tool's own read-back, and with the
+enforcement checked functionally rather than by reading configuration.
+
+What was proven, not asserted:
+
+- **Object lock is enabled at creation only.** `bucket_create --object-lock`
+  produced a bucket reporting `objectLockEnabled: true, versioning: Enabled`
+  (read back, not echoed); the control bucket created without the flag reported
+  `false` / `Off`.
+- **The false-safety case is real and now visible.** On a lock-enabled bucket
+  with **no default rule**, a version was permanently deleted with **no bypass
+  permission at all** — while MinIO's own `mc retention info` describes that same
+  bucket as "Object locking is not enabled." The tool separates the two states
+  (`objectLockEnabled: true` + `defaultRetention: null`) and says in the payload
+  that uploads omitting a retention header are unprotected.
+- **COMPLIANCE is unliftable, including by root with `--bypass`.** Clearing,
+  downgrading to GOVERNANCE, and deleting the version were each refused with
+  "Object is WORM protected and cannot be overwritten". GOVERNANCE, by contrast,
+  yields to `mc retention clear` and to `mc rm --bypass --version-id`. This is
+  the claim the tool's refusal messages rest on, so it was measured both ways.
+- **The local shortening guard matches the server exactly.** The call the tool
+  refuses (shorten / downgrade retention in force) is the same one `mc` could not
+  make without `--bypass`. So the guard is not over-refusing — it returns the
+  reason, and the out-of-band remedy, before the round trip.
+- **Retention protects the version, not the key.** A plain `mc rm` on a retained
+  object always succeeded, writing a delete marker; only `--version-id` was
+  refused. Hence `versionDestroyable` + `deleteMarkerStillPossible` in the
+  payload rather than a flat `deletable`.
+- **Governed loops closed against the server**: `set_default_retention` → `mc`
+  confirms `GOVERNANCE 45DAYS` → a fresh upload inherits it → `undo_apply` clears
+  the rule → **the already-written object keeps its inherited retention**, which
+  is exactly what the write's note promises. `set_legal_hold on` → `mc legalhold
+  info` ON → `undo_apply` → OFF.
+- **Audit fidelity**: every refusal recorded `status=error`, every success `ok`,
+  tiers `critical→review` / `high→review` / `medium→confirm`, and **4 retention
+  writes produced 0 undo tokens** while the reversible writes produced one each.
+- The `diagnose_retention_gaps` contradiction finding was raised against state
+  seeded by `mc` (default retention 365 days + a 30-day expiry rule), reporting
+  `expirationDays: 30`, `defaultRetentionDays: 365`, `shortfallDays: 335`.
+
+Still unverified on this surface:
+
+- **Governance bypass through this tool** — deliberately absent, not untested:
+  the `minio` SDK sends no bypass header, so the tool cannot shorten or remove
+  retention at all and does not pretend to.
+- **A non-root credential** carrying `s3:BypassGovernanceRetention` explicitly.
+  The live run used the root credential, which bypasses policy evaluation; the
+  distinction does not affect what the tool does (it never sends the header)
+  but it means the *permission* boundary was not exercised, only the WORM one.
+- **Retention interaction with replication and tiering**, both out of scope.
+
 ## Not yet live-verified ⚠️
 
 - ~~**Multi-node (distributed) MinIO**~~ — **closed 2026-08-03 against a real

@@ -37,6 +37,36 @@ def check_bucket_name(name: Any) -> str:
     return value
 
 
+#: S3 caps a key at 1024 **bytes** (not characters) after UTF-8 encoding.
+_MAX_OBJECT_KEY_BYTES = 1024
+
+
+def check_object_name(name: Any) -> str:
+    """Validate an agent-supplied object key; returns it or raises ValueError.
+
+    The bucket-name gate above can be strict because S3 bucket names are a tiny
+    alphabet. Object keys are the opposite: any UTF-8 sequence is legal, so this
+    only rejects what S3 itself cannot carry — an empty key, one over the
+    1024-**byte** limit, and control characters (which would survive into the
+    signed request and into every audit row and log line downstream).
+    """
+    value = str(name or "")
+    if not value:
+        raise ValueError("Object key must not be empty.")
+    encoded = len(value.encode("utf-8", errors="surrogatepass"))
+    if encoded > _MAX_OBJECT_KEY_BYTES:
+        raise ValueError(
+            f"Object key is {encoded} bytes; S3 allows at most "
+            f"{_MAX_OBJECT_KEY_BYTES} bytes after UTF-8 encoding."
+        )
+    if any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in value):
+        raise ValueError(
+            f"Object key {sanitize(value, 80)!r} contains control characters. "
+            f"List the bucket (bucket_objects) and copy the key from there."
+        )
+    return value
+
+
 def s(value: Any, limit: int = 256) -> str:
     """Sanitize an arbitrary value to a bounded, injection-safe string."""
     return sanitize(str(value if value is not None else ""), limit)

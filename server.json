@@ -2,17 +2,17 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.AIops-tools/minio-aiops",
   "title": "MinIO AIops",
-  "description": "Governed MinIO ops: capacity RCA, bucket exposure audit, ILM gaps, healing, 31 tools.",
+  "description": "Governed MinIO ops: capacity RCA, exposure audit, ILM gaps, WORM retention, healing, 39 tools.",
   "repository": {
     "url": "https://github.com/AIops-tools/MinIO-AIops",
     "source": "github"
   },
-  "version": "0.9.0",
+  "version": "0.10.0",
   "packages": [
     {
       "registryType": "pypi",
       "identifier": "minio-aiops",
-      "version": "0.9.0",
+      "version": "0.10.0",
       "transport": {
         "type": "stdio"
       }

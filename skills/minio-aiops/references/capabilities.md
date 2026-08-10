@@ -1,6 +1,6 @@
 # minio-aiops capabilities
 
-> 31 MCP tools (21 read, 8 write, 2 undo) over four access paths:
+> 39 MCP tools (24 read, 13 write, 2 undo) over four access paths:
 > the **S3 API** (official SDK, SigV4), the **admin API**, the unauthenticated
 > **health endpoints**, and the **cluster metrics endpoint**.
 
@@ -25,6 +25,7 @@
 | `node_status` | metrics endpoint | nodes online/offline + per-node drive counts |
 | `bucket_exposure_audit` | S3 API per bucket | reports `bucketsAudited`/`bucketsTotal`/`truncated`; **ranked** findings: PUBLIC_WRITE_POLICY / PUBLIC_READ_POLICY / NO_DEFAULT_ENCRYPTION / VERSIONING_OFF / NO_LIFECYCLE with riskScore + riskLevel |
 | `lifecycle_gap_analysis` | S3 API + metrics | reports `bucketsAnalyzed`/`bucketsTotal`/`truncated`; gaps: NONCURRENT_VERSIONS_UNBOUNDED (+reclaimable estimate) / INCOMPLETE_UPLOADS_NO_ABORT_RULE (+counts, ages) / NO_LIFECYCLE_ON_LARGE_BUCKET |
+| `diagnose_retention_gaps` | S3 API per bucket | envelope `{findings, returned, limit, truncated}` + `bucketErrors`; worst-first with `rank`: LIFECYCLE_CANNOT_EXPIRE_UNDER_RETENTION (both day counts + shortfall) / LOCK_ENABLED_NO_DEFAULT_RETENTION / LOCK_WITHOUT_ACTIVE_VERSIONING / COMPLIANCE_DEFAULT_LONG / GOVERNANCE_DEFAULT_BYPASSABLE |
 
 ## Buckets (read)
 
@@ -40,6 +41,13 @@
 | `incomplete_uploads_ls` | `ListMultipartUploads` | envelope `{uploads, returned, limit, truncated}` — object, uploadId, initiated time (`null` when absent) |
 | `server_info` | admin API | mode, deployment id, server/pool counts |
 
+## Object lock / WORM (read)
+
+| Tool | Returns |
+|------|---------|
+| `bucket_lock_config` | `objectLockEnabled` + `defaultRetention` (+ `defaultRetentionDays`, years converted) + `versioning`. **Keeps two absences apart**: `objectLockEnabled: false` (lock was never enabled and S3 accepts the flag only at bucket creation, so it never can be) vs `true` with `defaultRetention: null` (WORM available, but an upload omitting its own retention header is retained for nothing) |
+| `object_lock_status` | one version's `retention` + `legalHold` + `retentionDaysRemaining`, plus `protection`: `versionDestroyable`, `blockedBy` (they stack), `bypassable`, and `deleteMarkerStillPossible` — a plain DELETE always succeeds on a versioned bucket and hides the key while the retained version survives |
+
 ## Writes (governed; all take `dry_run`)
 
 | Tool | Risk | Undo | Notes |
@@ -52,11 +60,15 @@
 | `set_bucket_quota` | medium | prior quota (0 clears) | admin API |
 | `bucket_delete` | **high** | none (irreversible) | refused unless verifiably empty (versions + delete markers included); priorState = bucket meta |
 | `remove_incomplete_uploads` | medium | none (parts unrecoverable) | age-gated (default: only uploads ≥ 7 days old); priorState = count + sample |
+| `bucket_create` | medium | delete the bucket (empty-only) | `object_lock=True` is the ONLY route to a WORM-capable bucket; reports lock + versioning as **observed**, not echoed |
+| `set_default_retention` | **high** | prior default rule (or clear) | applies to future uploads only; undo restores the rule, objects written under it keep their own retention |
+| `clear_default_retention` | medium | prior default rule | clears the rule only — object lock stays enabled (S3 has no call that disables it) |
+| `set_legal_hold` | medium | prior hold state | the one WORM control reversible by design; stacks with retention |
+| `set_object_retention` | **critical** | **none, and none is possible** | extend-only: shortening/downgrading is refused locally because S3 needs `x-amz-bypass-governance-retention`, which the minio SDK never sends. COMPLIANCE additionally needs `acknowledge_irreversible=True`. Verified on a live MinIO: root with `--bypass` could not clear, downgrade, or version-delete a COMPLIANCE object |
 
-## Out of scope (v0.1.0)
+## Out of scope
 
 - Site replication status/management
-- Object locking / legal hold governance
 - IAM (users, groups, canned policies) management
 - Tiering to remote storage
 

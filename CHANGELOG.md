@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.10.0 — 2026-08-11
+
+### Added
+- **Object lock / WORM governance — 8 new tools** (`bucket_lock_config`, `object_lock_status`, `diagnose_retention_gaps`, `bucket_create`, `set_default_retention`, `clear_default_retention`, `set_object_retention`, `set_legal_hold`), previously listed as out of scope. Two design points carry most of the value:
+  - **The two ways a bucket can have "no retention" are kept apart.** `objectLockEnabled: false` means lock was never enabled, and since S3 accepts the flag only at bucket **creation** it never can be — the only route is a new bucket plus a migration. `objectLockEnabled: true` with `defaultRetention: null` means WORM is available but an upload that omits its own retention header is retained for nothing, while every dashboard and audit questionnaire reads "object lock: enabled" as "data is protected". Collapsing those into one falsy value is what makes an audit call an unprotected bucket protected. Demonstrated end to end against a live MinIO: on a lock-enabled bucket with no default rule, a version was permanently deleted with no bypass permission at all. MinIO's own `mc retention info` reports that bucket as "Object locking is not enabled."
+  - **`set_object_retention` records no undo token, because none can exist.** S3 refuses to shorten or remove retention without `x-amz-bypass-governance-retention`, and the `minio` SDK never sends that header (checked in its source), so no credential can walk it back through this tool. An undo token here would be one whose replay is guaranteed to fail while the audit row claimed the write was reversible. The tool instead refuses, before the round trip, any call that would shorten or downgrade retention already in force, and requires `acknowledge_irreversible=True` for COMPLIANCE. Both refusals fire under `dry_run`.
+- **`diagnose_retention_gaps`** reports contradictions rather than a house style, worst-first with an explicit `rank`. The flagship finding is arithmetic: a lifecycle rule expiring objects after 30 days on a bucket whose default retention holds them for 365 **can never delete anything**, so the capacity it was added to reclaim never returns — both day counts and the shortfall are in the payload, so the finding is checkable rather than asserted. Buckets whose probes fail are listed in `bucketErrors` rather than skipped.
+- **`object_lock_status` reports `versionDestroyable`, not `deletable`.** Measured against a live server: a plain `DELETE` on a retained key **always succeeds** on a versioned bucket — it writes a delete marker, the key stops appearing in listings, and the retained version is untouched. Only deleting that *version* is refused. "deletable: false" would have told a caller the object cannot be deleted when anyone can make it disappear from view a second later; what retention buys is that the bytes survive, and the payload now says exactly that.
+
+### Verified
+Against a live MinIO (`RELEASE.2025-09-07`), with every claim cross-checked against `mc` as ground truth rather than the tool's own read-back:
+- **COMPLIANCE really is unliftable**, including by the root credential with `--bypass`: clearing, downgrading to GOVERNANCE, and deleting the version were all refused with "Object is WORM protected and cannot be overwritten". GOVERNANCE yields to `mc retention clear` and to `mc rm --bypass --version-id`.
+- **The shortening guard matches the server exactly** — the same call `mc` could not make without `--bypass` ("Object is WORM protected") is the one this tool refuses locally, so it is not over-refusing; it just returns the reason before the round trip.
+- Full governed loops: `set_default_retention` → `mc` confirms `45DAYS` → a new upload inherits it → `undo_apply` clears the rule → **the already-written object keeps its inherited retention**, exactly as the write's note promised. `set_legal_hold` on → `mc legalhold info` ON → `undo_apply` → OFF.
+- The audit trail is faithful: refusals recorded `status=error`, successes `ok`, tiers `critical→review` / `high→review` / `medium→confirm`, and **4 writes produced only 3 undo tokens** — the retention write recorded none.
+
+### Fixed
+- **A refusal message named a flag that does not exist.** The remedy for retention already in force pointed at `mc retention clear --bypass`; that command has no `--bypass` flag and errors with "flag provided but not defined" — while plain `mc retention clear` does lift GOVERNANCE retention for a privileged credential (and is refused for COMPLIANCE). An error message that hands the operator a rejected flag sends them to debug the wrong thing.
+- **The CLI preview of the one irreversible write was less informative than the MCP one.** `lock retention-set --dry-run` echoed back only the arguments, omitting the computed `retainUntil` and the `reversible: false` the MCP caller already received — the two facts a preview of a permanent write exists to deliver.
+
 ## v0.9.0 — 2026-08-10
 
 ### Fixed

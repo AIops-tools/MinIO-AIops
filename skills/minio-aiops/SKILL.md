@@ -2,7 +2,7 @@
 name: minio-aiops
 slug: minio-aiops
 displayName: "MinIO AIops"
-summary: "Governed MinIO ops: capacity RCA, bucket exposure audit, ILM gaps, healing, 31 tools."
+summary: "Governed MinIO ops: capacity RCA, exposure audit, ILM gaps, WORM retention, healing, 39 tools."
 license: MIT
 homepage: https://github.com/AIops-tools/MinIO-AIops
 tags: [aiops, mcp, governance, minio]
@@ -33,7 +33,7 @@ compatibility: >
 
 > **Disclaimer**: Community-maintained open-source project, **not affiliated with, endorsed by, or sponsored by MinIO, Inc. or any storage vendor.** Product and trademark names belong to their owners. Source at [github.com/AIops-tools/MinIO-AIops](https://github.com/AIops-tools/MinIO-AIops) under the MIT license.
 
-Governed MinIO object-storage operations — **31 MCP tools**, every one wrapped with the bundled `@governed_tool` harness: a local unified audit log under `~/.minio-aiops/`, a token/runaway budget guard, undo-token recording, and a descriptive risk tier on every audit row. The secret key is stored **encrypted** (`~/.minio-aiops/secrets.enc`, Fernet + scrypt) — never plaintext on disk. Four flagship analyses turn raw state into plain-language **cause + suggested action**: `capacity_rca`, `bucket_exposure_audit`, `lifecycle_gap_analysis`, `healing_health`.
+Governed MinIO object-storage operations — **39 MCP tools**, every one wrapped with the bundled `@governed_tool` harness: a local unified audit log under `~/.minio-aiops/`, a token/runaway budget guard, undo-token recording, and a descriptive risk tier on every audit row. The secret key is stored **encrypted** (`~/.minio-aiops/secrets.enc`, Fernet + scrypt) — never plaintext on disk. Five flagship analyses turn raw state into plain-language **cause + suggested action**: `capacity_rca`, `bucket_exposure_audit`, `lifecycle_gap_analysis`, `healing_health`, `diagnose_retention_gaps`.
 
 > **Standalone**: the governance harness is bundled in the package (`minio_aiops.governance`) — minio-aiops has no external skill-family dependency. Verification status and the live-run checklist are in `docs/VERIFICATION.md`.
 
@@ -49,9 +49,11 @@ Governed MinIO object-storage operations — **31 MCP tools**, every one wrapped
 | **Exposure / ILM** | bucket_exposure_audit (flagship), lifecycle_gap_analysis (flagship) | 2 | 2 read |
 | **Buckets** | bucket_ls, bucket_info, bucket_policy_get, bucket_lifecycle_get, bucket_versioning_get, bucket_quota_get, object_ls, incomplete_uploads_ls, server_info | 9 | 9 read |
 | **Writes** | set_bucket_policy, delete_bucket_policy, set_versioning, set_lifecycle, delete_lifecycle, set_bucket_quota, bucket_delete, remove_incomplete_uploads | 8 | 8 write |
+| **Object lock (WORM)** | bucket_lock_config, object_lock_status, diagnose_retention_gaps (flagship) | 3 | 3 read |
+| | bucket_create, set_default_retention, clear_default_retention, set_legal_hold, set_object_retention | 5 | 5 write |
 | **Undo** | undo_list, undo_apply | 2 | read + replay |
 
-Totals: **31 tools — 21 read, 8 write, 2 undo.** The MCP server exposes all 31; the CLI is a convenience subset.
+Totals: **39 tools — 24 read, 13 write, 2 undo.** The MCP server exposes all 39; the CLI is a convenience subset.
 
 ## Quick Install
 
@@ -119,7 +121,17 @@ Every write step accepts `--dry-run`; irreversible ones also double-confirm.
 
 **Failure branch**: if the heal backlog is not shrinking between runs, do not start more maintenance. Check `heal nodes` for an offline node first — a down node makes its drives look like many simultaneous drive failures, and replacing hardware will not fix it.
 
-### 4. "Decommission a retired bucket"
+### 4. "The auditor asked whether our retained data is actually protected"
+
+1. `minio-aiops lock gaps` → ranked WORM findings across every bucket. The two that matter most: `LOCK_ENABLED_NO_DEFAULT_RETENTION` (the bucket advertises object lock but retains nothing unless each upload asks) and `LIFECYCLE_CANNOT_EXPIRE_UNDER_RETENTION` (an expiry rule that retention outlives, so the capacity never returns — both day counts are in the finding).
+2. `minio-aiops lock config <bucket>` → whether object lock is enabled at all. `objectLockEnabled: false` is terminal: S3 accepts the flag only at bucket creation, so the answer is a new bucket plus a migration, not a setting.
+3. `minio-aiops lock status <bucket> <key>` → for a specific object: retention mode, days remaining, legal hold, and `protection.versionDestroyable` with what is blocking it. Note `deleteMarkerStillPossible`: object lock protects the bytes, not the key's visibility.
+4. Close the gap for future uploads: `minio-aiops lock default-set <bucket> GOVERNANCE --days 365 --dry-run`, then for real (reversible — the prior rule is captured).
+5. `minio-aiops lock gaps` again → confirm the finding cleared, and check whether step 4 introduced the lifecycle contradiction from step 1.
+
+**Failure branch**: `lock default-set` refused with "does not have object lock enabled" means the bucket can never be made WORM in place — create one with `minio-aiops lock bucket-create <new> --object-lock` and migrate. If the auditor requires retention nobody can lift, that is COMPLIANCE, not GOVERNANCE — and it is genuinely permanent: verified on a live server, root with `--bypass` could not clear it, downgrade it, or delete the version. `set_object_retention` therefore records **no undo token**, refuses any call that would shorten retention already in force, and requires `acknowledge_irreversible=True`. Use GOVERNANCE unless permanence is the actual requirement.
+
+### 5. "Decommission a retired bucket"
 
 1. `minio-aiops bucket ls` → confirm the exact bucket name.
 2. `minio-aiops bucket info <bucket>` → verify it is genuinely retired (check versioning, lifecycle and quota, not just the object count).

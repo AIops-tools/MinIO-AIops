@@ -11,6 +11,7 @@ from minio_aiops.cli.doctor import doctor_cmd
 from minio_aiops.cli.heal import heal_app
 from minio_aiops.cli.health import health_app
 from minio_aiops.cli.init import init_cmd
+from minio_aiops.cli.lock import lock_app
 from minio_aiops.cli.overview import overview_cmd
 from minio_aiops.cli.secret import secret_app
 from minio_aiops.cli.undo import undo_app
@@ -18,13 +19,15 @@ from minio_aiops.cli.undo import undo_app
 app = typer.Typer(
     name="minio-aiops",
     help="Governed AI-ops for MinIO object storage: capacity RCA, bucket exposure "
-    "audit, ILM gap analysis, healing health, guarded bucket writes.",
+    "audit, ILM gap analysis, object-lock/WORM retention, healing health, "
+    "guarded bucket writes.",
     no_args_is_help=True,
 )
 
 app.add_typer(health_app, name="health")
 app.add_typer(bucket_app, name="bucket")
 app.add_typer(capacity_app, name="capacity")
+app.add_typer(lock_app, name="lock")
 app.add_typer(heal_app, name="heal")
 app.add_typer(secret_app, name="secret")
 app.add_typer(undo_app, name="undo")

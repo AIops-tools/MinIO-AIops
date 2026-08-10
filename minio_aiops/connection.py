@@ -54,6 +54,16 @@ _ABSENT_CODES = {
     "NoSuchTagSetError",
 }
 
+# Object-lock absence is kept OUT of _ABSENT_CODES on purpose. For the other
+# sub-resources "absent" means one thing; for object lock it distinguishes "this
+# bucket can never be WORM" from "WORM is on but nothing is retained", and the
+# readers below have to answer which.
+_LOCK_ABSENT_CODES = {
+    "ObjectLockConfigurationNotFoundError",
+    "ObjectLockConfigurationNotFound",
+    "NoSuchObjectLockConfiguration",
+}
+
 
 class MinioApiError(Exception):
     """A MinIO call failed; carries a teaching message + optional status code."""
@@ -375,6 +385,165 @@ class MinioConnection:
             return uploads
         except Exception as exc:  # noqa: BLE001
             raise _teach(exc, f"list_incomplete_uploads({bucket})", self._target) from exc
+
+    # ── object lock (WORM) reads ──────────────────────────────────────────
+    def get_object_lock_config(self, bucket: str) -> dict | None:
+        """Object-lock configuration, or ``None`` when lock is NOT enabled.
+
+        Three outcomes the caller must be able to tell apart, because they mean
+        completely different things for whether data is actually protected:
+
+        * ``None`` — object lock was never enabled. S3 accepts object lock only
+          at bucket **creation**, so this bucket can never become WORM; the only
+          route is a new locked bucket plus a migration.
+        * ``{"objectLockEnabled": True, "defaultRetention": None}`` — lock is
+          enabled but no default rule exists, so an upload that does not carry
+          its own retention header lands **unprotected**. This is the
+          false-safety case: "object lock: enabled" reads as "data is retained".
+        * ``{"objectLockEnabled": True, "defaultRetention": {...}}`` — a default
+          mode + duration applies to new objects.
+
+        Collapsing the first two into one falsy value is what makes an audit
+        report a bucket as protected when nothing in it is.
+        """
+        try:
+            cfg = self.client.get_object_lock_config(bucket)
+        except Exception as exc:  # noqa: BLE001
+            if getattr(exc, "code", None) in _LOCK_ABSENT_CODES:
+                return None
+            raise _teach(exc, f"get_object_lock_config({bucket})", self._target) from exc
+        if cfg is None:
+            return None
+        mode = getattr(cfg, "mode", None)
+        duration = getattr(cfg, "duration", None)
+        unit = getattr(cfg, "duration_unit", None)
+        default = None
+        if mode:
+            default = {
+                "mode": str(mode).upper(),
+                "days": int(duration) if duration and str(unit).lower() == "days" else None,
+                "years": int(duration) if duration and str(unit).lower() == "years" else None,
+            }
+        return {"objectLockEnabled": True, "defaultRetention": default}
+
+    def get_object_retention(
+        self, bucket: str, object_name: str, version_id: str | None = None
+    ) -> dict | None:
+        """One object version's retention, or ``None`` when it carries none."""
+        try:
+            retention = self.client.get_object_retention(
+                bucket, object_name, version_id=version_id
+            )
+        except Exception as exc:  # noqa: BLE001
+            if getattr(exc, "code", None) in _LOCK_ABSENT_CODES:
+                return None
+            raise _teach(exc, f"get_object_retention({bucket})", self._target) from exc
+        if retention is None:
+            return None
+        until = getattr(retention, "retain_until_date", None)
+        return {
+            "mode": str(getattr(retention, "mode", "") or "").upper() or None,
+            "retainUntil": until.isoformat() if until else None,
+        }
+
+    def get_object_legal_hold(
+        self, bucket: str, object_name: str, version_id: str | None = None
+    ) -> bool | None:
+        """Legal-hold state, or ``None`` when the bucket has no object lock.
+
+        The SDK's ``is_object_legal_hold_enabled`` swallows
+        ``NoSuchObjectLockConfiguration`` and answers ``False`` — reporting "no
+        legal hold" for a bucket where a legal hold is not even expressible. A
+        caller cannot act on that: the remedy for "hold is off" (turn it on)
+        does not exist for a bucket without lock. Hence ``None``, and the ops
+        layer says which of the two it is.
+        """
+        lock = self.get_object_lock_config(bucket)
+        if lock is None:
+            return None
+        try:
+            return bool(
+                self.client.is_object_legal_hold_enabled(
+                    bucket, object_name, version_id=version_id
+                )
+            )
+        except Exception as exc:  # noqa: BLE001
+            raise _teach(exc, f"get_object_legal_hold({bucket})", self._target) from exc
+
+    # ── object lock (WORM) writes ─────────────────────────────────────────
+    def make_bucket(self, bucket: str, object_lock: bool = False) -> None:
+        """Create a bucket, optionally with object lock enabled.
+
+        ``object_lock=True`` is only honoured here: S3 has no way to enable it
+        on an existing bucket, which is why this tool needs a create at all.
+        Enabling it also force-enables versioning (a server-side consequence,
+        not something this tool sets).
+        """
+        try:
+            self.client.make_bucket(
+                bucket, location=self._target.region or None, object_lock=object_lock
+            )
+        except Exception as exc:  # noqa: BLE001
+            raise _teach(exc, f"make_bucket({bucket})", self._target) from exc
+
+    def set_object_lock_config(
+        self, bucket: str, mode: str | None, duration: int | None, unit: str | None
+    ) -> None:
+        """Set (or, with all-``None``, clear) the bucket's DEFAULT retention rule.
+
+        Clearing removes the default rule only — object lock itself stays
+        enabled, and objects that already carry retention keep it. There is no
+        S3 call that disables object lock on a bucket.
+        """
+        try:
+            from minio.objectlockconfig import DAYS, YEARS, ObjectLockConfig
+
+            unit_const = None
+            if unit:
+                unit_const = YEARS if str(unit).lower().startswith("year") else DAYS
+            self.client.set_object_lock_config(
+                bucket, ObjectLockConfig(mode, duration, unit_const)
+            )
+        except Exception as exc:  # noqa: BLE001
+            raise _teach(exc, f"set_object_lock_config({bucket})", self._target) from exc
+
+    def set_object_retention(
+        self,
+        bucket: str,
+        object_name: str,
+        mode: str,
+        retain_until: Any,
+        version_id: str | None = None,
+    ) -> None:
+        """Put retention on one object version (extend-only; see the ops layer).
+
+        This SDK never sends ``x-amz-bypass-governance-retention``, so the
+        server rejects any attempt to shorten or remove retention here even when
+        the credential holds ``s3:BypassGovernanceRetention``. The ops layer
+        therefore records no undo for this write rather than an undo that can
+        never replay.
+        """
+        try:
+            from minio.retention import Retention
+
+            self.client.set_object_retention(
+                bucket, object_name, Retention(mode, retain_until), version_id=version_id
+            )
+        except Exception as exc:  # noqa: BLE001
+            raise _teach(exc, f"set_object_retention({bucket})", self._target) from exc
+
+    def set_object_legal_hold(
+        self, bucket: str, object_name: str, hold_on: bool, version_id: str | None = None
+    ) -> None:
+        """Turn a legal hold on or off for one object version (reversible by design)."""
+        op = "enable" if hold_on else "disable"
+        try:
+            if hold_on:
+                self.client.enable_object_legal_hold(bucket, object_name, version_id=version_id)
+            else:
+                self.client.disable_object_legal_hold(bucket, object_name, version_id=version_id)
+        except Exception as exc:  # noqa: BLE001
+            raise _teach(exc, f"{op}_object_legal_hold({bucket})", self._target) from exc
 
     # ── S3 writes ────────────────────────────────────────────────────────
     def set_bucket_policy(self, bucket: str, policy_json: str) -> None:

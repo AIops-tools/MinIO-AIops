@@ -1,6 +1,6 @@
 # minio-aiops CLI reference
 
-> The CLI is a convenience subset; the full 31-tool surface is via the MCP
+> The CLI is a convenience subset; the full 39-tool surface is via the MCP
 > server (`minio-aiops mcp`). CLI writes delegate to the governed MCP twins,
 > so they are audited + undo-recorded identically.
 
