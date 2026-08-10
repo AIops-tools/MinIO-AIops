@@ -16,6 +16,7 @@ import typer
 from minio_aiops.cli._common import (
     DryRunOption,
     TargetOption,
+    checked,
     cli_errors,
     console,
     double_confirm,
@@ -146,7 +147,7 @@ def bucket_versioning_set(
             parameters={"status": status})
         return
     console.print_json(json.dumps(
-        gov.set_versioning(bucket_name=bucket, status=status, target=target)))
+        checked(gov.set_versioning(bucket_name=bucket, status=status, target=target))))
 
 
 @bucket_app.command("policy-set")
@@ -176,7 +177,7 @@ def bucket_policy_set(
             parameters={"policyChars": len(policy_json)})
         return
     console.print_json(json.dumps(
-        gov.set_bucket_policy(bucket_name=bucket, policy_json=policy_json, target=target)))
+        checked(gov.set_bucket_policy(bucket_name=bucket, policy_json=policy_json, target=target))))
 
 
 @bucket_app.command("lifecycle-set")
@@ -206,10 +207,10 @@ def bucket_lifecycle_set(
             preview, operation="set_lifecycle", api_call=f"PUT /{bucket}?lifecycle",
             parameters=preview.get("wouldSetLifecycle", {}))
         return
-    console.print_json(json.dumps(gov.set_lifecycle(
+    console.print_json(json.dumps(checked(gov.set_lifecycle(
         bucket_name=bucket, expire_days=expire_days,
         noncurrent_expire_days=noncurrent_days,
-        prefix=prefix, target=target)))
+        prefix=prefix, target=target))))
 
 
 @bucket_app.command("quota-set")
@@ -232,7 +233,7 @@ def bucket_quota_set(
             parameters={"size_bytes": size_bytes})
         return
     console.print_json(json.dumps(
-        gov.set_bucket_quota(bucket_name=bucket, size_bytes=size_bytes, target=target)))
+        checked(gov.set_bucket_quota(bucket_name=bucket, size_bytes=size_bytes, target=target))))
 
 
 @bucket_app.command("purge-uploads")
@@ -260,8 +261,8 @@ def bucket_purge_uploads(
             parameters=preview.get("wouldRemoveUploads", {}))
         return
     double_confirm("purge incomplete uploads in", bucket)
-    console.print_json(json.dumps(gov.remove_incomplete_uploads(
-        bucket_name=bucket, older_than_days=older_than_days, target=target)))
+    console.print_json(json.dumps(checked(gov.remove_incomplete_uploads(
+        bucket_name=bucket, older_than_days=older_than_days, target=target))))
 
 
 @bucket_app.command("delete")
@@ -284,4 +285,4 @@ def bucket_delete(
             parameters={"verifiedEmpty": True})
         return
     double_confirm("delete bucket", bucket)
-    console.print_json(json.dumps(gov.bucket_delete(bucket_name=bucket, target=target)))
+    console.print_json(json.dumps(checked(gov.bucket_delete(bucket_name=bucket, target=target))))

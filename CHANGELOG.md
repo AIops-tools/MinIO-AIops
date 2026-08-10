@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.9.0 — 2026-08-10
+
+### Fixed
+- **The CLI reported a refused or failed governed write as a success.** 7 write call sites printed the governed twin's payload and exited **0** whatever it said — and `@tool_errors` flattens every refusal, guard rejection and upstream failure into `{"error": ...}` rather than raising, so nothing downstream of a `&&` chain or a CI step could tell a blocked write from a landed one. The dry-run path already exited non-zero, which made the asymmetry worse: the preview was stricter than the write it previews. Results now route through a `checked()` helper — exit 1 on an error payload, exit 2 on an undetermined outcome, unchanged on success. This defect class had been fixed repo-by-repo several times and kept coming back; an audit across the whole line found it live in **18 of the 24 tools at once (87 call sites)**, so each tool now carries an invariant test that fails if any future CLI command prints a governed result without checking it.
+
+### Verified
+- **TLS-secured endpoints** are now live-verified (they had only ever been exercised on plaintext lab ports): with `verify_ssl: true` against a self-signed MinIO both the health probe and the S3 call fail with `CERTIFICATE_VERIFY_FAILED`, and with verification off a full governed loop — `set_versioning` → server confirmed → `undo_apply` → server confirmed — completed over HTTPS.
+
 ## v0.8.0 — 2026-08-10
 
 ### Removed (BREAKING)

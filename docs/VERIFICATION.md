@@ -91,4 +91,12 @@ as `1500000.0` / `3.0`; these are now integers, with absent staying `null`.
   `minio_bucket_usage_version_total` / `_deletemarker_total`, so noncurrent-version
   overhead — the thing a noncurrent-expiration rule reclaims — is visible instead
   of hidden inside the version-inclusive `usedBytes`.
-- **TLS-secured endpoints** — both verified instances ran plaintext on a lab port.
+- ~~**TLS-secured endpoints**~~ — **closed 2026-08-10** against a MinIO serving
+  HTTPS with its own certificate (plain HTTP refused, 400). With
+  `verify_ssl: true` the health probe *and* the S3 call both fail with
+  `CERTIFICATE_VERIFY_FAILED`, so verification is genuinely being performed
+  rather than configured; with it off, `doctor` reports live + ready + S3
+  authenticated + metrics reachable, and a full governed loop ran over TLS:
+  `versioning-set Enabled` → confirmed `enabled` with `mc` → `undo apply` →
+  confirmed `suspended` (the correct S3 inverse — a versioned bucket cannot
+  return to `Off`).
