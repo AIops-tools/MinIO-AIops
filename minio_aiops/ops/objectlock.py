@@ -315,7 +315,14 @@ def _bucket_findings(
     return True, findings
 
 
-def diagnose_retention_gaps(conn: Any, limit: int = 50) -> dict:
+#: Buckets probed per scan. Each costs three calls (lock config, lifecycle,
+#: versioning), so an uncapped walk of a large deployment is thousands of
+#: requests; the sibling analyses (bucket_exposure_audit, lifecycle_gap_analysis)
+#: cap the same way and report what they did not reach.
+MAX_BUCKETS_SCANNED = 100
+
+
+def diagnose_retention_gaps(conn: Any, limit: int = 50, max_buckets: int = 0) -> dict:
     """[READ] WORM/retention gaps across every bucket, worst-first.
 
     Reports the contradictions rather than a preference: lock enabled with
@@ -325,10 +332,14 @@ def diagnose_retention_gaps(conn: Any, limit: int = 50) -> dict:
     measured day counts on both sides.
 
     A bucket whose probes fail is listed in ``bucketErrors`` rather than skipped:
-    "no findings" must not be the same payload as "could not look".
+    "no findings" must not be the same payload as "could not look". A deployment
+    with more buckets than the scan cap reports ``bucketsTotal`` alongside
+    ``bucketsScanned``, so an unexamined remainder is never read as a clean one.
     """
     requested = max(1, int(limit))
-    buckets = conn.list_buckets()
+    bucket_cap = max(1, int(max_buckets or MAX_BUCKETS_SCANNED))
+    all_buckets = conn.list_buckets()
+    buckets = all_buckets[:bucket_cap]
     findings: list[dict] = []
     errors: list[dict] = []
     locked = 0
@@ -353,17 +364,27 @@ def diagnose_retention_gaps(conn: Any, limit: int = 50) -> dict:
         finding["rank"] = index
     out = {
         "bucketsScanned": len(buckets),
+        "bucketsTotal": len(all_buckets),
+        "bucketsTruncated": len(all_buckets) > len(buckets),
         "lockEnabledBuckets": locked,
         "findings": shown,
         "returned": len(shown),
         "limit": requested,
         "truncated": truncated,
     }
+    notes = []
     if errors:
         out["bucketErrors"] = errors
-        out["note"] = (
+        notes.append(
             f"{len(errors)} bucket(s) could not be probed and contribute no "
-            f"findings — see bucketErrors. A clean 'findings' list does not mean "
-            f"those buckets are clean."
+            f"findings — see bucketErrors."
         )
+    if out["bucketsTruncated"]:
+        notes.append(
+            f"Only the first {len(buckets)} of {len(all_buckets)} buckets were "
+            f"scanned (max_buckets); the rest were not examined."
+        )
+    if notes:
+        notes.append("A clean 'findings' list does not mean those buckets are clean.")
+        out["note"] = " ".join(notes)
     return out

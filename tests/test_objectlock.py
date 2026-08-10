@@ -454,6 +454,33 @@ def test_create_bucket_undo_is_the_delete(monkeypatch, recorded):
     assert descriptor["tool"] == "bucket_delete"
     assert descriptor["params"] == {"bucket_name": "worm-bkt"}
 
+    # Replayed for real. This is the one descriptor pointing at a tool in ANOTHER
+    # module (bucket_writes), which is exactly where a signature mismatch hides
+    # until an incident.
+    from mcp_server.tools import bucket_writes as other
+
+    replay_conn = MagicMock(name="conn")
+    monkeypatch.setattr(other, "_get_connection", lambda target=None: replay_conn)
+    replay_conn.is_bucket_empty.return_value = True
+    replay_conn.get_bucket_versioning.return_value = "Enabled"
+    replay_conn.get_bucket_policy.return_value = None
+    replayed = getattr(other, descriptor["tool"])(**descriptor["params"])
+    assert "error" not in replayed, f"undo replay failed: {replayed}"
+    replay_conn.remove_bucket.assert_called_once_with("worm-bkt")
+
+
+def test_create_bucket_undo_is_refused_once_the_bucket_holds_data(monkeypatch, recorded):
+    """The undo is honest about its own limit: "delete while empty" is a promise
+    the delete tool enforces, not a note in a docstring."""
+    from mcp_server.tools import bucket_writes as other
+
+    replay_conn = MagicMock(name="conn")
+    monkeypatch.setattr(other, "_get_connection", lambda target=None: replay_conn)
+    replay_conn.is_bucket_empty.return_value = False
+    result = other.bucket_delete(bucket_name="worm-bkt")
+    assert "error" in result and "not empty" in result["error"]
+    assert not replay_conn.remove_bucket.called
+
 
 # ─── dry runs run the guards (a preview must not report green) ──────────────
 
@@ -522,3 +549,32 @@ def test_protection_says_a_delete_marker_is_still_possible():
     conn.get_object_retention.return_value = None
     clean = ops.object_lock_status(conn, "worm-bkt", "k.txt")
     assert "deleteMarkerStillPossible" not in clean["protection"]
+
+
+def test_a_failed_read_back_after_create_is_reported_not_swallowed():
+    """objectLockEnabled: null must not be readable as "the server said no".
+    Object lock cannot be added later, so that is the one fact this call
+    exists to settle (bug class #3)."""
+    conn = MagicMock(name="conn")
+    conn.get_object_lock_config.side_effect = RuntimeError("connection reset")
+    out = writes.create_bucket(conn, "worm-bkt", object_lock=True)
+    conn.make_bucket.assert_called_once_with("worm-bkt", object_lock=True)
+    assert out["objectLockEnabled"] is None
+    assert "connection reset" in out["readBackError"]
+    assert "unknown rather than false" in out["note"]
+
+
+def test_scan_caps_buckets_and_says_which_it_did_not_reach():
+    """Three calls per bucket, so an uncapped walk of a large deployment is
+    thousands of requests — and an unexamined remainder must not read as clean."""
+    conn = _scan_conn(LOCK_NO_DEFAULT, buckets=tuple(f"bkt-{i}" for i in range(7)))
+    out = ops.diagnose_retention_gaps(conn, max_buckets=3)
+    assert out["bucketsScanned"] == 3
+    assert out["bucketsTotal"] == 7
+    assert out["bucketsTruncated"] is True
+    assert "Only the first 3 of 7 buckets" in out["note"]
+    assert "does not mean those buckets are clean" in out["note"]
+
+    full = ops.diagnose_retention_gaps(_scan_conn(LOCK_NO_DEFAULT, buckets=("a-bkt",)))
+    assert full["bucketsTruncated"] is False
+    assert "note" not in full

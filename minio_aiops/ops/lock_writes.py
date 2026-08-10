@@ -110,12 +110,17 @@ def create_bucket(conn: Any, bucket: str, object_lock: bool = False) -> dict:
     conn.make_bucket(bucket, object_lock=bool(object_lock))
     observed_lock = None
     observed_versioning = None
+    read_back_error = None
     try:
         observed_lock = conn.get_object_lock_config(bucket) is not None
         observed_versioning = conn.get_bucket_versioning(bucket)
-    except Exception:  # noqa: BLE001 — the bucket exists; read-back is a bonus
-        pass
-    return {
+    except Exception as exc:  # noqa: BLE001 — the bucket exists; read-back may not
+        # Not swallowed: a null objectLockEnabled would otherwise be
+        # indistinguishable from "the server said no lock", which is the whole
+        # question this call exists to answer, and object lock cannot be added
+        # afterwards if the answer turns out to be no.
+        read_back_error = s(exc, 200)
+    result = {
         "action": "create_bucket",
         "bucket": s(bucket),
         "requestedObjectLock": bool(object_lock),
@@ -127,6 +132,14 @@ def create_bucket(conn: Any, bucket: str, object_lock: bool = False) -> dict:
             "delete is refused once anything has been written into it."
         ),
     }
+    if read_back_error:
+        result["readBackError"] = read_back_error
+        result["note"] += (
+            " The bucket was created, but reading its lock/versioning state back "
+            "failed, so objectLockEnabled is unknown rather than false — check it "
+            "with bucket_lock_config before relying on WORM here."
+        )
+    return result
 
 
 # ── bucket default retention ───────────────────────────────────────────────
