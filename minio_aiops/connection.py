@@ -681,6 +681,86 @@ class MinioConnection:
         except Exception as exc:  # noqa: BLE001
             raise _teach(exc, f"set_bucket_quota({bucket})", self._target) from exc
 
+    # ── admin IAM ────────────────────────────────────────────────────────
+    def _admin_json(self, raw: Any) -> Any:
+        return json.loads(raw) if isinstance(raw, (str, bytes)) else (raw or {})
+
+    def list_users(self) -> dict:
+        """All IAM users keyed by access key (status + attached policies).
+
+        Note the root credential (``MINIO_ROOT_USER``) is **not** an IAM user and
+        never appears here — so an empty mapping means "no IAM users defined",
+        not "no accounts exist".
+        """
+        try:
+            return self._admin_json(self.admin.user_list())
+        except Exception as exc:  # noqa: BLE001
+            raise _teach(exc, "list_users", self._target) from exc
+
+    def user_info(self, access_key: str) -> dict:
+        try:
+            return self._admin_json(self.admin.user_info(access_key))
+        except Exception as exc:  # noqa: BLE001
+            raise _teach(exc, f"user_info({access_key})", self._target) from exc
+
+    def list_groups(self) -> list:
+        try:
+            data = self._admin_json(self.admin.group_list())
+        except Exception as exc:  # noqa: BLE001
+            raise _teach(exc, "list_groups", self._target) from exc
+        if isinstance(data, dict):
+            return data.get("groups") or data.get("Groups") or []
+        return data if isinstance(data, list) else []
+
+    def group_info(self, group: str) -> dict:
+        try:
+            return self._admin_json(self.admin.group_info(group))
+        except Exception as exc:  # noqa: BLE001
+            raise _teach(exc, f"group_info({group})", self._target) from exc
+
+    def list_policies(self) -> dict:
+        try:
+            return self._admin_json(self.admin.policy_list())
+        except Exception as exc:  # noqa: BLE001
+            raise _teach(exc, "list_policies", self._target) from exc
+
+    def add_user(self, access_key: str, secret_key: str) -> None:
+        """Create (or reset) an IAM user. The secret never enters a return value."""
+        try:
+            self.admin.user_add(access_key, secret_key)
+        except Exception as exc:  # noqa: BLE001
+            # The teaching text is built from the exception, which could echo the
+            # request; the harness redacts secret-shaped text in error strings,
+            # and the access key alone is not a secret.
+            raise _teach(exc, f"add_user({access_key})", self._target) from exc
+
+    def set_user_status(self, access_key: str, enabled: bool) -> None:
+        op = "user_enable" if enabled else "user_disable"
+        try:
+            if enabled:
+                self.admin.user_enable(access_key)
+            else:
+                self.admin.user_disable(access_key)
+        except Exception as exc:  # noqa: BLE001
+            raise _teach(exc, f"{op}({access_key})", self._target) from exc
+
+    def remove_user(self, access_key: str) -> None:
+        try:
+            self.admin.user_remove(access_key)
+        except Exception as exc:  # noqa: BLE001
+            raise _teach(exc, f"remove_user({access_key})", self._target) from exc
+
+    def set_user_policies(self, access_key: str, policies: list[str], attach: bool) -> None:
+        """Attach or detach canned policies for one user."""
+        op = "attach_policy" if attach else "detach_policy"
+        try:
+            if attach:
+                self.admin.attach_policy(policies, user=access_key)
+            else:
+                self.admin.detach_policy(policies, user=access_key)
+        except Exception as exc:  # noqa: BLE001
+            raise _teach(exc, f"{op}({access_key})", self._target) from exc
+
     def server_info(self) -> dict:
         """Admin server info (mode, pools, drives) as parsed JSON."""
         try:

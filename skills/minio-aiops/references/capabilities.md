@@ -1,6 +1,6 @@
 # minio-aiops capabilities
 
-> 39 MCP tools (24 read, 13 write, 2 undo) over four access paths:
+> 48 MCP tools (28 read, 18 write, 2 undo) over four access paths:
 > the **S3 API** (official SDK, SigV4), the **admin API**, the unauthenticated
 > **health endpoints**, and the **cluster metrics endpoint**.
 
@@ -69,7 +69,8 @@
 ## Out of scope
 
 - Site replication status/management
-- IAM (users, groups, canned policies) management
+- IAM **policy authoring** (creating/editing policy documents; attaching existing
+  ones is supported) and group-membership writes
 - Tiering to remote storage
 
 Missing something you need? **Open an issue or send a PR** — feedback welcome.

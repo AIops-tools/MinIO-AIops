@@ -93,6 +93,50 @@ Still unverified on this surface:
   but it means the *permission* boundary was not exercised, only the WORM one.
 - **Retention interaction with replication and tiering**, both out of scope.
 
+## IAM ⚠️ — NOT yet live-verified (added 2026-08-11)
+
+The IAM surface (9 tools) ships mock-tested only. Stated plainly because this
+line's record is unambiguous: **every tool pointed at a real server produced at
+least one defect the mocks could not see.** The lab MinIO went offline before
+this surface could be exercised, so nothing below is a live claim.
+
+What the 34 mock tests do guarantee:
+
+- every user-targeting write refuses the tool's own access key, and nothing
+  reaches the connection when it does;
+- the guard is a pure local comparison, so it fires under `dry_run` identically —
+  asserted by calling each write with `dry_run=True` against the own key;
+- no secret appears in any returned payload (asserted by serialising the result
+  and searching for the secret), and `create_user` declares
+  `sensitive_params=["secret_key"]`;
+- `remove_user` records no undo descriptor, and `create_user` records none when
+  it replaced an existing key's secret;
+- every undo descriptor is **replayed** against a mocked connection, so a
+  signature mismatch fails here rather than in an incident;
+- group-inherited policies are resolved before judging "no effective policy".
+
+What a live run must still check:
+
+1. **The actual shapes MinIO returns.** `user_list`, `group_info` and
+   `policy_list` are parsed defensively (`policyName` vs `policy` vs `policies`,
+   string vs list) precisely because the real shapes are unconfirmed — that
+   defensiveness is a guess until measured, and a wrong guess yields empty
+   policy lists, which `diagnose_iam_exposure` would then report as
+   `NO_EFFECTIVE_POLICY` for every account. **Cross-check every field against
+   `mc admin user list` / `mc admin policy list` output.**
+2. **Whether `attach_policy`/`detach_policy` exist on the target build.** The SDK
+   exposes both `attach_policy` (newer) and `policy_set` (older); only the newer
+   pair is used. A MinIO old enough to lack the attach/detach endpoints would 404
+   on every policy write — the same shape as the HAProxy Data Plane API v2/v3
+   split in proxy-aiops, which was invisible until a live run.
+3. **Root-vs-IAM behaviour.** The self-lockout guard compares access keys, which
+   is correct for both cases, but the claim that "the root credential never
+   appears in user_list" is from MinIO's documentation, not from measurement.
+4. **That `create_user` really is an upsert** on an existing key (the undo is
+   suppressed on that basis).
+5. **A full governed loop per write**: real change → `mc` confirms → `audit.db`
+   row → `undo_apply` → `mc` confirms the reversal.
+
 ## Not yet live-verified ⚠️
 
 - ~~**Multi-node (distributed) MinIO**~~ — **closed 2026-08-03 against a real

@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.11.0 — 2026-08-11
+
+### Added
+- **IAM — 9 new tools** (`iam_users`, `iam_groups`, `iam_policies`, `diagnose_iam_exposure`, `create_user`, `set_user_status`, `remove_user`, `attach_user_policy`, `detach_user_policy`), previously listed as out of scope. Three decisions carry it:
+  - **Every user-targeting write refuses this tool's own credential.** IAM is where "an operation must not destroy its own reversibility" bites hardest: disabling, removing, or detaching the policies of the account the tool authenticates with all take effect and then reject every following call, the undo included. The guard is a purely local comparison against the configured access key — no round trip, no unknown-identity case — so it fires identically under `dry_run`. This is not hypothetical: the same class was caught live in the sibling identity tool, where a disable succeeded and the undo came back 403.
+  - **No tool returns a secret.** The harness redacts declared `sensitive_params` in the audit row and in the undo record's `orig_params`, but it stores a tool's **result verbatim** — so echoing a new user's secret would write a live credential into the audit database in plaintext. `create_user` reports only that the account exists, and the CLI reads the secret from `$MINIO_NEW_USER_SECRET` rather than argv, which is visible in `ps` and in shell history.
+  - **`remove_user` records no undo**, because MinIO keeps no recoverable copy of the secret: the account can only be recreated with a secret supplied again, so a descriptor would promise a restore it cannot perform. `priorState` captures the status and policy attachments so the same rights can be rebuilt.
+- **`diagnose_iam_exposure`** ranks by risk score with an explicit `rank`. The flagship finding is `NO_EFFECTIVE_POLICY`: MinIO denies by default, so an account with no policy directly or via a group **can do nothing at all** — a broken account, not a lax one, and indistinguishable from a working one in any listing that shows only name and status. Group-inherited policies are resolved first, so a correctly group-managed user is not flagged.
+- **An empty IAM surface is explained rather than just empty.** The root credential (`MINIO_ROOT_USER`) is not an IAM user and never appears in `user_list`, so a root-only deployment legitimately reports no users; the payload says so instead of leaving an empty list that reads as a failed probe.
+
+### Verification status
+**Not yet live-verified.** The IAM surface is mock-tested only (34 tests, including that every write refuses the tool's own key and that no secret appears in any result). This line's record is that every tool pointed at a real server produced a defect the mocks could not see, so treat this surface as unverified until `docs/VERIFICATION.md` records otherwise — the lab MinIO went offline before it could be exercised.
+
 ## v0.10.0 — 2026-08-11
 
 ### Added

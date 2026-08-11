@@ -2,7 +2,7 @@
 name: minio-aiops
 slug: minio-aiops
 displayName: "MinIO AIops"
-summary: "Governed MinIO ops: capacity RCA, exposure audit, ILM gaps, WORM retention, healing, 39 tools."
+summary: "Governed MinIO ops: capacity RCA, exposure audit, ILM, WORM retention, IAM, healing, 48 tools."
 license: MIT
 homepage: https://github.com/AIops-tools/MinIO-AIops
 tags: [aiops, mcp, governance, minio]
@@ -33,7 +33,7 @@ compatibility: >
 
 > **Disclaimer**: Community-maintained open-source project, **not affiliated with, endorsed by, or sponsored by MinIO, Inc. or any storage vendor.** Product and trademark names belong to their owners. Source at [github.com/AIops-tools/MinIO-AIops](https://github.com/AIops-tools/MinIO-AIops) under the MIT license.
 
-Governed MinIO object-storage operations — **39 MCP tools**, every one wrapped with the bundled `@governed_tool` harness: a local unified audit log under `~/.minio-aiops/`, a token/runaway budget guard, undo-token recording, and a descriptive risk tier on every audit row. The secret key is stored **encrypted** (`~/.minio-aiops/secrets.enc`, Fernet + scrypt) — never plaintext on disk. Five flagship analyses turn raw state into plain-language **cause + suggested action**: `capacity_rca`, `bucket_exposure_audit`, `lifecycle_gap_analysis`, `healing_health`, `diagnose_retention_gaps`.
+Governed MinIO object-storage operations — **48 MCP tools**, every one wrapped with the bundled `@governed_tool` harness: a local unified audit log under `~/.minio-aiops/`, a token/runaway budget guard, undo-token recording, and a descriptive risk tier on every audit row. The secret key is stored **encrypted** (`~/.minio-aiops/secrets.enc`, Fernet + scrypt) — never plaintext on disk. Six flagship analyses turn raw state into plain-language **cause + suggested action**: `capacity_rca`, `bucket_exposure_audit`, `lifecycle_gap_analysis`, `healing_health`, `diagnose_retention_gaps`, `diagnose_iam_exposure`.
 
 > **Standalone**: the governance harness is bundled in the package (`minio_aiops.governance`) — minio-aiops has no external skill-family dependency. Verification status and the live-run checklist are in `docs/VERIFICATION.md`.
 
@@ -51,9 +51,11 @@ Governed MinIO object-storage operations — **39 MCP tools**, every one wrapped
 | **Writes** | set_bucket_policy, delete_bucket_policy, set_versioning, set_lifecycle, delete_lifecycle, set_bucket_quota, bucket_delete, remove_incomplete_uploads | 8 | 8 write |
 | **Object lock (WORM)** | bucket_lock_config, object_lock_status, diagnose_retention_gaps (flagship) | 3 | 3 read |
 | | bucket_create, set_default_retention, clear_default_retention, set_legal_hold, set_object_retention | 5 | 5 write |
+| **IAM** | iam_users, iam_groups, iam_policies, diagnose_iam_exposure (flagship) | 4 | 4 read |
+| | create_user, set_user_status, remove_user, attach_user_policy, detach_user_policy | 5 | 5 write |
 | **Undo** | undo_list, undo_apply | 2 | read + replay |
 
-Totals: **39 tools — 24 read, 13 write, 2 undo.** The MCP server exposes all 39; the CLI is a convenience subset.
+Totals: **48 tools — 28 read, 18 write, 2 undo.** The MCP server exposes all 48; the CLI is a convenience subset.
 
 ## Quick Install
 

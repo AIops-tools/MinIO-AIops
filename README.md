@@ -45,8 +45,8 @@ Four flagship analyses, plus the guarded reads and writes around them:
   versioning-set/policy-set/lifecycle-set/quota-set/purge-uploads/delete`),
   `secret set/list/rm/migrate/rotate-password`, `mcp`. Destructive commands
   take `--dry-run` and double-confirm.
-- **MCP server** (`minio-aiops mcp` or `minio-aiops-mcp`): the full **39
-  tools** (25 read, 14 write), every one wrapped with the bundled
+- **MCP server** (`minio-aiops mcp` or `minio-aiops-mcp`): the full **48
+  tools** (29 read, 19 write), every one wrapped with the bundled
   `@governed_tool` harness. The CLI is a convenience subset; the MCP surface
   is the whole tool. CLI writes delegate to the same governed functions, so
   they are audited identically.
@@ -62,7 +62,7 @@ Four flagship analyses, plus the guarded reads and writes around them:
   inverse undo descriptor (prior policy JSON, prior lifecycle XML, prior
   versioning state, prior quota).
 
-## Capability matrix (39 MCP tools)
+## Capability matrix (48 MCP tools)
 
 | Group | Tools | Count | R/W |
 |-------|-------|:-----:|:---:|
@@ -76,9 +76,12 @@ Four flagship analyses, plus the guarded reads and writes around them:
 | **Object lock (WORM)** | `bucket_lock_config`, `object_lock_status`, `diagnose_retention_gaps` (flagship) | 3 | read |
 | | `bucket_create` (med, undo — the only way to enable object lock), `set_default_retention` (**high**, undo), `clear_default_retention` (med, undo), `set_legal_hold` (med, undo) | 4 | write |
 | | `set_object_retention` (**critical**, dry-run, extend-only, **no undo exists**) | 1 | write |
+| **IAM** | `iam_users`, `iam_groups`, `iam_policies`, `diagnose_iam_exposure` (flagship) | 4 | read |
+| | `create_user` (med, undo, secret redacted + never returned), `set_user_status` (med, undo), `attach_user_policy` (med, undo), `detach_user_policy` (med, undo) — **all refused for this tool's own credential** | 4 | write |
+| | `remove_user` (**high**, dry-run, **no undo: MinIO keeps no recoverable secret**) | 1 | write |
 | **Undo** | `undo_list`, `undo_apply` | 2 | read + replay |
 
-Totals: **39 tools — 25 read (incl. `undo_list`), 14 write (incl. `undo_apply`).**
+Totals: **48 tools — 29 read (incl. `undo_list`), 19 write (incl. `undo_apply`).**
 
 ## What this tool does, and does not, decide
 
@@ -203,6 +206,7 @@ Every MCP tool passes through the bundled `@governed_tool` harness:
 
 ## Missing a capability?
 
-Site replication status, per-user / policy (IAM) management, tiering to remote
+Site replication status, IAM **policy authoring** (creating and editing policy
+documents — attachment is supported), group membership writes, tiering to remote
 storage — not here yet. **Open an issue or send a PR** — feedback and
 contributions are welcome.

@@ -25,6 +25,7 @@ from mcp_server.tools import (  # noqa: F401 — side effects
     exposure,
     healing,
     health,
+    iam,
     objectlock,
     undo,
 )
