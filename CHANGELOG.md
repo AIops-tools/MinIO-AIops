@@ -19,7 +19,9 @@ Against a real MinIO **RELEASE.2025-09-07** with `mc` as ground truth:
 - **Self-lockout holds**: all four user-targeting writes aimed at the tool's own access key were refused with exit 1, including under `--dry-run`.
 - **Secrets stay out of the trail**: params stored as `secret_key: "***"`, and a byte search of `audit.db`, `undo.db` and their WAL files found none of the secrets used. Failed calls recorded `status=error`.
 
-**Not finished:** the `set_user_status` disable→undo→enable loop and `remove_user` — the lab host dropped off the network mid-test (the disable correctly surfaced the transport failure as an error rather than a false success). See `docs/VERIFICATION.md`.
+- **The disable→undo→enable loop and `remove_user` are confirmed functionally**, not just in configuration. The error code discriminates three states: an enabled account whose policy does not cover the call gets `AccessDenied`, a disabled one gets `InvalidAccessKeyId` ("Your account is disabled"), and after `undo_apply` it is back to `AccessDenied` — with `mc` agreeing at each step. `remove_user` deleted nothing under `--dry-run`, then removed the account for real (gone from `mc`, credential now `InvalidAccessKeyId`), captured `priorState` with the policy attachments, and recorded **no undo token**: 6 tokens across 8 governed writes.
+
+Group-membership writes remain out of scope; groups are read-only on this surface.
 
 ## v0.10.0 — 2026-08-11
 

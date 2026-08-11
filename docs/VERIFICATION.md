@@ -145,14 +145,31 @@ false `ok`), tiers were `medium→confirm`, and the secret was stored as
 `{"access_key": "dave", "secret_key": "***"}`. A byte search of `audit.db`,
 `undo.db` **and their WAL files** found none of the four secrets used.
 
+**6. The disable→undo→enable loop, confirmed functionally as well as in config.**
+A plain read is not enough to tell "disabled" from "not permitted", so the probe
+used the error code, which discriminates three states cleanly:
+
+| account state | what the credential gets |
+|---|---|
+| enabled, policy does not cover the call | `AccessDenied` |
+| **disabled by this tool** | `InvalidAccessKeyId` — "Your account is disabled" |
+| re-enabled by `undo_apply` | `AccessDenied` again |
+
+`mc` agreed at each step (`enabled → disabled → enabled`). Note the first row is
+what makes the second meaningful: without establishing that the credential
+authenticates while enabled, an `AccessDenied` could not be told from a rejection.
+
+**7. `remove_user` is irreversible and says so, verifiably.** `--dry-run` reported
+`reversible = False` and deleted nothing; the real call removed the account
+(`mc` confirms it is gone, and the credential now returns `InvalidAccessKeyId`),
+captured `priorState = {enabled: true, policies: ["readwrite"]}` so the same
+rights can be rebuilt, and recorded **no undo token** — 6 tokens across 8 governed
+writes, with `remove_user` contributing none. Audited `high` / tier `review`.
+
 ### Still outstanding on this surface
 
-- **The `set_user_status` disable→undo→enable loop and `remove_user`** were not
-  completed: the lab host dropped off the network mid-test. The disable attempt
-  correctly surfaced the connection failure as an error rather than a false
-  success, which is the behaviour under transport loss, but the enable/disable
-  effect on a live account is unconfirmed.
 - **Groups are read-only here**; group-membership writes remain out of scope.
+- Nothing else: all seven checks this section originally listed are closed.
 
 ## (superseded) IAM ⚠️ — the pre-verification status
 
