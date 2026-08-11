@@ -93,7 +93,68 @@ Still unverified on this surface:
   but it means the *permission* boundary was not exercised, only the WORM one.
 - **Retention interaction with replication and tiering**, both out of scope.
 
-## IAM ⚠️ — NOT yet live-verified (added 2026-08-11)
+## IAM ✅ — live-verified against MinIO RELEASE.2025-09-07 (2026-08-11)
+
+Verified against a real server with `mc` as ground truth. The five checks this
+section previously listed as outstanding are done; two remain, noted at the end.
+
+**1. The field shapes — the biggest risk, and the guess was right for a reason.**
+The parser accepted `policyName` / `policy` / `policies` and string-or-list
+defensively. The real responses:
+
+```
+user_list  → {"alice": {"policyName": "readonly", "status": "enabled"},
+              "bob":   {"status": "enabled", "memberOf": ["devs"]},
+              "carol": {"status": "enabled"}}
+group_info → {"name": "devs", "status": "enabled",
+              "members": ["bob"], "policy": "readwrite"}
+```
+
+**Users carry `policyName`; groups carry `policy`.** That inconsistency is exactly
+what the defensive read existed for — had only `policyName` been handled, bob's
+group-inherited policy would have vanished and he would have been reported
+`NO_EFFECTIVE_POLICY`, a confident false alarm on a correctly configured account.
+Tool output matched `mc` for all three users and the group.
+
+**2. `attach_policy` / `detach_policy` exist on this build.** `attach` succeeded,
+`mc admin user list` confirmed `carol → readonly`, `undo_apply` replayed the
+detach, and `mc` confirmed carol had no policy again. Full governed loop closed.
+
+**3. The root credential is not an IAM user.** `iamroot` is absent from
+`user_list`, so the "empty list is a real state" note is correct.
+
+**4. `create_user` is an upsert — proven functionally, not from documentation.**
+Re-creating `dave` with a different secret: the **old** secret then failed with
+`SignatureDoesNotMatch` (so it really was replaced) and the **new** one with
+`AccessDenied` (so it authenticated). The undo was recorded for the first,
+genuinely new account and **not** for the upsert, as designed.
+
+**5. Self-lockout holds against the real credential.** All four user-targeting
+writes aimed at `iamroot` were refused with exit 1 — `user-status`, `user-remove`,
+`policy-detach`, `policy-attach` — and the refusal fires under `--dry-run` too.
+
+**Bonus: `NO_EFFECTIVE_POLICY` is a real functional condition.** The same test
+proved the flagship finding rather than inferring it: `dave` authenticated with
+the correct secret and still received `AccessDenied`, because MinIO denies by
+default. An account with no policy really can do nothing, and `carol` (no policy)
+versus `bob` (policy via group) were discriminated correctly — carol flagged,
+bob not.
+
+**Audit fidelity on real data.** Failed calls recorded `status=error` (never a
+false `ok`), tiers were `medium→confirm`, and the secret was stored as
+`{"access_key": "dave", "secret_key": "***"}`. A byte search of `audit.db`,
+`undo.db` **and their WAL files** found none of the four secrets used.
+
+### Still outstanding on this surface
+
+- **The `set_user_status` disable→undo→enable loop and `remove_user`** were not
+  completed: the lab host dropped off the network mid-test. The disable attempt
+  correctly surfaced the connection failure as an error rather than a false
+  success, which is the behaviour under transport loss, but the enable/disable
+  effect on a live account is unconfirmed.
+- **Groups are read-only here**; group-membership writes remain out of scope.
+
+## (superseded) IAM ⚠️ — the pre-verification status
 
 The IAM surface (9 tools) ships mock-tested only. Stated plainly because this
 line's record is unambiguous: **every tool pointed at a real server produced at

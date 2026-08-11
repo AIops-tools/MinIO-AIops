@@ -10,8 +10,16 @@
 - **`diagnose_iam_exposure`** ranks by risk score with an explicit `rank`. The flagship finding is `NO_EFFECTIVE_POLICY`: MinIO denies by default, so an account with no policy directly or via a group **can do nothing at all** — a broken account, not a lax one, and indistinguishable from a working one in any listing that shows only name and status. Group-inherited policies are resolved first, so a correctly group-managed user is not flagged.
 - **An empty IAM surface is explained rather than just empty.** The root credential (`MINIO_ROOT_USER`) is not an IAM user and never appears in `user_list`, so a root-only deployment legitimately reports no users; the payload says so instead of leaving an empty list that reads as a failed probe.
 
-### Verification status
-**Not yet live-verified.** The IAM surface is mock-tested only (34 tests, including that every write refuses the tool's own key and that no secret appears in any result). This line's record is that every tool pointed at a real server produced a defect the mocks could not see, so treat this surface as unverified until `docs/VERIFICATION.md` records otherwise — the lab MinIO went offline before it could be exercised.
+### Verified
+Against a real MinIO **RELEASE.2025-09-07** with `mc` as ground truth:
+- **The response shapes are as parsed, and the defensive read earned itself.** Users carry `policyName`, **groups carry `policy`** — the exact inconsistency the parser was written for. Handling only `policyName` would have dropped group-inherited policies and reported a correctly group-managed user as `NO_EFFECTIVE_POLICY`: a confident false alarm on a healthy account.
+- **`NO_EFFECTIVE_POLICY` is a real functional condition, not an inference.** A user created with a valid secret and no policy authenticated successfully and still received `AccessDenied`, because MinIO denies by default. A no-policy account with a correct credential genuinely cannot do anything; the user with a policy only via a group was correctly *not* flagged.
+- **`create_user` is an upsert**, proven by credential behaviour: after re-creating with a new secret the old one failed `SignatureDoesNotMatch` and the new one `AccessDenied`. The undo was recorded for the new account and correctly suppressed for the upsert.
+- **`attach_policy`/`detach_policy` work on this build**, with a full governed loop: attach → `mc` confirms → `undo_apply` → `mc` confirms the reversal.
+- **Self-lockout holds**: all four user-targeting writes aimed at the tool's own access key were refused with exit 1, including under `--dry-run`.
+- **Secrets stay out of the trail**: params stored as `secret_key: "***"`, and a byte search of `audit.db`, `undo.db` and their WAL files found none of the secrets used. Failed calls recorded `status=error`.
+
+**Not finished:** the `set_user_status` disable→undo→enable loop and `remove_user` — the lab host dropped off the network mid-test (the disable correctly surfaced the transport failure as an error rather than a false success). See `docs/VERIFICATION.md`.
 
 ## v0.10.0 — 2026-08-11
 
