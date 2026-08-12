@@ -32,7 +32,12 @@ def _create_user_undo(params: dict[str, Any], result: Any) -> Optional[dict]:
     """
     if not _has_prior(result):
         return None
-    if (result.get("priorState") or {}).get("existed"):
+    existed = (result.get("priorState") or {}).get("existed")
+    if existed is None or existed:
+        # None = the existence probe failed, so we do not know. Removing an
+        # account that turns out to have existed destroys a credential that
+        # remove_user cannot restore, so an unknown prior state suppresses the
+        # undo exactly as a known-existing one does.
         return None
     return {
         "tool": "remove_user",

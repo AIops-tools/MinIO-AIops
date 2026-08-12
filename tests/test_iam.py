@@ -15,6 +15,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from minio_aiops.connection import MinioApiError
 from minio_aiops.ops import iam as ops
 from minio_aiops.ops import iam_writes as writes
 
@@ -87,7 +88,7 @@ def test_no_configured_key_does_not_block_everything():
 
 def test_create_user_never_returns_the_secret():
     conn = _conn()
-    conn.user_info.side_effect = RuntimeError("not found")
+    conn.user_info.side_effect = MinioApiError("no such user", status_code=404)
     out = writes.create_user(conn, "newkey", "s3cret-value-123")
     conn.add_user.assert_called_once_with("newkey", "s3cret-value-123")
     serialized = json.dumps(out)
@@ -340,7 +341,7 @@ def test_create_user_undo_removes_a_genuinely_new_account(monkeypatch, recorded)
     from mcp_server.tools import iam as gov
 
     conn = _gov_conn(monkeypatch)
-    conn.user_info.side_effect = RuntimeError("not found")
+    conn.user_info.side_effect = MinioApiError("no such user", status_code=404)
     gov.create_user(access_key="newkey", secret_key="s3cret-value-123")
     descriptor = recorded["d"]
     assert descriptor["tool"] == "remove_user"
@@ -381,3 +382,29 @@ def test_dry_run_on_another_user_previews_without_writing(monkeypatch):
     result = gov.set_user_status(access_key="alice", enabled=False, dry_run=True)
     assert result["dryRun"] is True
     assert not conn.set_user_status.called
+
+
+def test_a_failed_existence_probe_suppresses_the_undo_rather_than_deleting():
+    """The destructive case. Any non-404 failure means we do not KNOW whether the
+    account existed. Reading that as "did not exist" would record an undo that
+    removes it — and remove_user cannot restore a credential MinIO no longer has.
+    Unknown is its own state, and it suppresses the undo exactly as
+    known-existing does."""
+    conn = _conn()
+    conn.user_info.side_effect = MinioApiError("admin API denied", status_code=403)
+    out = writes.create_user(conn, "maybe-exists", "s3cret-value-123")
+    assert out["priorState"]["existed"] is None
+    assert "admin API denied" in out["probeError"]
+    assert "could NOT be determined" in out["note"]
+    # the account was still created — only the undo is withheld
+    conn.add_user.assert_called_once_with("maybe-exists", "s3cret-value-123")
+
+
+def test_no_undo_descriptor_when_the_probe_could_not_tell(monkeypatch, recorded):
+    from mcp_server.tools import iam as gov
+
+    conn = _gov_conn(monkeypatch)
+    conn.user_info.side_effect = MinioApiError("connection reset", status_code=None)
+    result = gov.create_user(access_key="maybe-exists", secret_key="s3cret-value-123")
+    assert "error" not in result
+    assert "d" not in recorded, "an unknown prior state must not yield a deleting undo"

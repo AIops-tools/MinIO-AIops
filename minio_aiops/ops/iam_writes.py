@@ -29,6 +29,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from minio_aiops.connection import MinioApiError
 from minio_aiops.ops._util import s
 from minio_aiops.ops.iam import _policies_of, _user_enabled
 
@@ -89,14 +90,29 @@ def create_user(conn: Any, access_key: str, secret_key: str) -> dict:
             f"secret_key must be a string of at least {MIN_SECRET_LENGTH} "
             f"characters (MinIO rejects shorter secrets)."
         )
-    existed = False
+    existed: bool | None = False
     prior_policies: list[str] = []
+    probe_error = None
     try:
         info = conn.user_info(access_key)
         existed = bool(info)
         prior_policies = _policies_of(info)
-    except Exception:  # noqa: BLE001 — "not found" is the expected case here
-        existed = False
+    except MinioApiError as exc:
+        # "Not found" is the expected case for a new account, but ANY other
+        # failure means we do not know whether the account existed — and the
+        # difference is destructive. The undo for a genuinely new user REMOVES
+        # it; if a transport or permission error were read as "did not exist",
+        # replaying that undo would delete a pre-existing account, which
+        # remove_user cannot restore. Unknown is therefore its own state, and it
+        # suppresses the undo (see _create_user_undo).
+        if exc.status_code == 404:
+            existed = False
+        else:
+            existed = None
+            probe_error = s(exc, 200)
+    except Exception as exc:  # noqa: BLE001 — same reasoning for a non-API failure
+        existed = None
+        probe_error = s(exc, 200)
     conn.add_user(access_key, secret_key)
     result = {
         "action": "create_user",
@@ -110,7 +126,15 @@ def create_user(conn: Any, access_key: str, secret_key: str) -> dict:
             "nothing until one is attached."
         ),
     }
-    if existed:
+    if probe_error:
+        result["probeError"] = probe_error
+        result["note"] += (
+            " Whether this access key already existed could NOT be determined "
+            f"({probe_error}). No undo was recorded: if the account did exist, "
+            "removing it would destroy a credential rather than restore one. "
+            "Check with iam_users and remove it by hand if it was unwanted."
+        )
+    elif existed:
         result["note"] += (
             " This access key already existed, so its secret was REPLACED — the "
             "undo removes the account entirely, which is not a restore. Recreate "

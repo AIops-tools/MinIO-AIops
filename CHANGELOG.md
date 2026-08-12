@@ -10,6 +10,9 @@
 - **`diagnose_iam_exposure`** ranks by risk score with an explicit `rank`. The flagship finding is `NO_EFFECTIVE_POLICY`: MinIO denies by default, so an account with no policy directly or via a group **can do nothing at all** — a broken account, not a lax one, and indistinguishable from a working one in any listing that shows only name and status. Group-inherited policies are resolved first, so a correctly group-managed user is not flagged.
 - **An empty IAM surface is explained rather than just empty.** The root credential (`MINIO_ROOT_USER`) is not an IAM user and never appears in `user_list`, so a root-only deployment legitimately reports no users; the payload says so instead of leaving an empty list that reads as a failed probe.
 
+### Fixed (pre-release review)
+- **A failed existence probe could turn `create_user`'s undo into a deletion.** The probe that decides whether an access key already exists treated *any* exception as "it did not", so a transport or permission failure against an account that **did** exist would record an undo whose replay removes it — and `remove_user` cannot restore a credential MinIO no longer holds. Only a 404 now means absent; anything else is `existed: null` with a `probeError`, and an unknown prior state suppresses the undo exactly as a known-existing one does. The account is still created; only the descriptor is withheld, with the reason in the note.
+
 ### Verified
 Against a real MinIO **RELEASE.2025-09-07** with `mc` as ground truth:
 - **The response shapes are as parsed, and the defensive read earned itself.** Users carry `policyName`, **groups carry `policy`** — the exact inconsistency the parser was written for. Handling only `policyName` would have dropped group-inherited policies and reported a correctly group-managed user as `NO_EFFECTIVE_POLICY`: a confident false alarm on a healthy account.
