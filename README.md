@@ -122,6 +122,19 @@ The MCP server is fetched with [uv](https://docs.astral.sh/uv/) and pinned to th
 package version this plugin declares, so an audit row can be traced back to the
 code that wrote it. Credentials are still configured with `minio-aiops init` — see below.
 
+### As an OpenClaw plugin
+
+The same bundle is published on [ClawHub](https://clawhub.ai/plugins), where one
+install delivers the skill and its MCP server together:
+
+```bash
+openclaw plugins install clawhub:@aiops-tools/minio-aiops
+openclaw skills info minio-aiops          # expect: Visible to model: yes
+```
+
+Restart the OpenClaw gateway afterwards so it loads the plugin. Credentials are
+configured exactly as below.
+
 ### As a CLI or standalone MCP server
 
 ```bash
@@ -139,6 +152,11 @@ Run as an MCP server (stdio):
 export MINIO_AIOPS_MASTER_PASSWORD=...   # unlock secrets non-interactively
 minio-aiops-mcp
 ```
+
+> **Where that password then lives**: an exported variable is readable by
+> every process this shell starts and is recorded by shell history. On a
+> shared or long-lived host, prefer the interactive prompt, or inject it from
+> a secret manager for the life of the one command that needs it.
 
 ### MCP client config
 

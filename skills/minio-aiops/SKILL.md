@@ -65,6 +65,13 @@ minio-aiops init       # interactive wizard: endpoint + access key + encrypted s
 minio-aiops doctor
 ```
 
+Or as an OpenClaw plugin, which installs this skill and its MCP server together:
+
+```bash
+openclaw plugins install clawhub:@aiops-tools/minio-aiops
+openclaw skills info minio-aiops          # expect: Visible to model: yes
+```
+
 ## When to Use This Skill
 
 - **"Storage is filling up / writes are failing"** → `capacity_rca` (capacity vs used, offline drives/nodes, hotspots — cause + action per finding), then `usage_by_bucket` for the biggest consumers
