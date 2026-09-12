@@ -68,7 +68,7 @@ minio-aiops doctor
 Or as an OpenClaw plugin, which installs this skill and its MCP server together:
 
 ```bash
-openclaw plugins install clawhub:@aiops-tools/minio-aiops
+openclaw plugins install clawhub:@zw008/minio-aiops
 openclaw skills info minio-aiops          # expect: Visible to model: yes
 ```
 

@@ -1,6 +1,6 @@
 {
-  "name": "@aiops-tools/minio-aiops",
-  "version": "0.12.4",
+  "name": "@zw008/minio-aiops",
+  "version": "0.12.2",
   "description": "Governed MinIO ops: capacity RCA, exposure audit, ILM, WORM retention, IAM, healing, 48 tools.",
   "private": true,
   "license": "MIT",
