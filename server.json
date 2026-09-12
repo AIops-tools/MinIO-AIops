@@ -7,12 +7,12 @@
     "url": "https://github.com/AIops-tools/MinIO-AIops",
     "source": "github"
   },
-  "version": "0.12.0",
+  "version": "0.12.1",
   "packages": [
     {
       "registryType": "pypi",
       "identifier": "minio-aiops",
-      "version": "0.12.0",
+      "version": "0.12.1",
       "transport": {
         "type": "stdio"
       }
