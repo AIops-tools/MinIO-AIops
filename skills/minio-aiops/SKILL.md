@@ -72,6 +72,8 @@ openclaw plugins install clawhub:@aiops-tools/minio-aiops
 openclaw skills info minio-aiops          # expect: Visible to model: yes
 ```
 
+Needs `uvx` on `PATH`: the MCP server is fetched with uv, pinned to this release.
+
 ## When to Use This Skill
 
 - **"Storage is filling up / writes are failing"** → `capacity_rca` (capacity vs used, offline drives/nodes, hotspots — cause + action per finding), then `usage_by_bucket` for the biggest consumers
