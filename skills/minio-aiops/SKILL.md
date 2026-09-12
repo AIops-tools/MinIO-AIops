@@ -17,7 +17,7 @@ installer:
 argument-hint: "[minio question or describe your object-storage task]"
 allowed-tools:
   - Bash
-metadata: {"openclaw":{"requires":{"env":["MINIO_AIOPS_CONFIG"],"bins":["minio-aiops"],"config":["~/.minio-aiops/config.yaml","~/.minio-aiops/secrets.enc"]},"optional":{"env":["MINIO_AIOPS_MASTER_PASSWORD"]},"primaryEnv":"MINIO_AIOPS_CONFIG","homepage":"https://github.com/AIops-tools/MinIO-AIops","emoji":"🪣","os":["macos","linux"]}}
+metadata: {"openclaw":{"requires":{"anyBins":["minio-aiops","uvx"]},"optional":{"env":["MINIO_AIOPS_CONFIG","MINIO_AIOPS_MASTER_PASSWORD"]},"homepage":"https://github.com/AIops-tools/MinIO-AIops","emoji":"🪣","os":["macos","linux"]}}
 compatibility: >
   Standalone, self-governed MinIO operations. The governance harness (audit, policy, token/runaway budget, undo, risk-tiers) is bundled in the package — no external skill-family dependency. Works against any reasonably current MinIO server (single-node or distributed/erasure-coded); admin features (quota, server info) need admin-capable keys.
   All write operations are audited to a local SQLite DB under ~/.minio-aiops/ (relocatable via MINIO_AIOPS_HOME).

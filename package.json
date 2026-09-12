@@ -1,0 +1,20 @@
+{
+  "name": "@aiops-tools/minio-aiops",
+  "version": "0.12.0",
+  "description": "Governed MinIO ops: capacity RCA, exposure audit, ILM, WORM retention, IAM, healing, 48 tools.",
+  "private": true,
+  "license": "MIT",
+  "homepage": "https://github.com/AIops-tools/MinIO-AIops",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AIops-tools/MinIO-AIops.git"
+  },
+  "openclaw": {
+    "compat": {
+      "pluginApi": ">=2026.3.24-beta.2"
+    },
+    "build": {
+      "openclawVersion": "2026.3.24-beta.2"
+    }
+  }
+}
