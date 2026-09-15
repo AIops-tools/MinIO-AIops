@@ -16,6 +16,7 @@ import typer
 from minio_aiops.cli._common import (
     DryRunOption,
     TargetOption,
+    audited,
     checked,
     cli_errors,
     console,
@@ -40,6 +41,7 @@ BucketArg = Annotated[str, typer.Argument(help="Bucket name (from 'bucket ls')")
 
 @bucket_app.command("ls")
 @cli_errors
+@audited
 def bucket_ls(
     limit: Annotated[int, typer.Option("--limit", help="Max buckets to list")] = 500,
     target: TargetOption = None,
@@ -55,6 +57,7 @@ def bucket_ls(
 
 @bucket_app.command("info")
 @cli_errors
+@audited
 def bucket_info(bucket: BucketArg, target: TargetOption = None) -> None:
     """One bucket's full config: policy/versioning/lifecycle/encryption/quota/tags."""
     from minio_aiops.ops import buckets as ops
@@ -65,6 +68,7 @@ def bucket_info(bucket: BucketArg, target: TargetOption = None) -> None:
 
 @bucket_app.command("audit")
 @cli_errors
+@audited
 def bucket_audit(
     limit: Annotated[int, typer.Option("--limit", help="Max buckets to audit")] = 100,
     target: TargetOption = None,
@@ -80,6 +84,7 @@ def bucket_audit(
 
 @bucket_app.command("ilm-gap")
 @cli_errors
+@audited
 def bucket_ilm_gap(
     limit: Annotated[int, typer.Option("--limit", help="Max buckets to analyze")] = 100,
     target: TargetOption = None,
@@ -95,6 +100,7 @@ def bucket_ilm_gap(
 
 @bucket_app.command("uploads")
 @cli_errors
+@audited
 def bucket_uploads(
     bucket: BucketArg,
     limit: Annotated[int, typer.Option("--limit", help="Max uploads to list")] = 200,
@@ -111,6 +117,7 @@ def bucket_uploads(
 
 @bucket_app.command("objects")
 @cli_errors
+@audited
 def bucket_objects(
     bucket: BucketArg,
     prefix: Annotated[str, typer.Option("--prefix", help="Key prefix filter")] = "",

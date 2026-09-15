@@ -6,7 +6,7 @@ import json
 
 import typer
 
-from minio_aiops.cli._common import TargetOption, cli_errors, console, get_connection
+from minio_aiops.cli._common import TargetOption, audited, cli_errors, console, get_connection
 
 heal_app = typer.Typer(
     name="heal",
@@ -17,6 +17,7 @@ heal_app = typer.Typer(
 
 @heal_app.command("status")
 @cli_errors
+@audited
 def heal_status(target: TargetOption = None) -> None:
     """Healing backlog + per-erasure-set write-quorum risk, cause + action."""
     from minio_aiops.ops import healing as ops
@@ -27,6 +28,7 @@ def heal_status(target: TargetOption = None) -> None:
 
 @heal_app.command("drives")
 @cli_errors
+@audited
 def heal_drives(target: TargetOption = None) -> None:
     """Per-drive rows (server, drive, used ratio), fullest first."""
     from minio_aiops.ops import healing as ops
@@ -37,6 +39,7 @@ def heal_drives(target: TargetOption = None) -> None:
 
 @heal_app.command("nodes")
 @cli_errors
+@audited
 def heal_nodes(target: TargetOption = None) -> None:
     """Node-level view: online/offline nodes + per-node drive counts."""
     from minio_aiops.ops import healing as ops

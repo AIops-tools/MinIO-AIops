@@ -20,6 +20,7 @@ import typer
 from minio_aiops.cli._common import (
     DryRunOption,
     TargetOption,
+    audited,
     checked,
     cli_errors,
     console,
@@ -49,6 +50,7 @@ PolicyOption = Annotated[
 
 @iam_app.command("users")
 @cli_errors
+@audited
 def iam_users(
     limit: Annotated[int, typer.Option("--limit", help="Max users")] = 200,
     target: TargetOption = None,
@@ -64,6 +66,7 @@ def iam_users(
 
 @iam_app.command("groups")
 @cli_errors
+@audited
 def iam_groups(
     limit: Annotated[int, typer.Option("--limit", help="Max groups")] = 200,
     target: TargetOption = None,
@@ -79,6 +82,7 @@ def iam_groups(
 
 @iam_app.command("policies")
 @cli_errors
+@audited
 def iam_policies(
     limit: Annotated[int, typer.Option("--limit", help="Max policy names")] = 200,
     target: TargetOption = None,
@@ -94,6 +98,7 @@ def iam_policies(
 
 @iam_app.command("audit")
 @cli_errors
+@audited
 def iam_audit(
     limit: Annotated[int, typer.Option("--limit", help="Max findings")] = 50,
     target: TargetOption = None,

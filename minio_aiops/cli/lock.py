@@ -17,6 +17,7 @@ import typer
 from minio_aiops.cli._common import (
     DryRunOption,
     TargetOption,
+    audited,
     checked,
     cli_errors,
     console,
@@ -45,6 +46,7 @@ VersionOption = Annotated[
 
 @lock_app.command("config")
 @cli_errors
+@audited
 def lock_config(bucket: BucketArg, target: TargetOption = None) -> None:
     """One bucket's object-lock state and default retention rule."""
     from minio_aiops.ops import objectlock as ops
@@ -55,6 +57,7 @@ def lock_config(bucket: BucketArg, target: TargetOption = None) -> None:
 
 @lock_app.command("status")
 @cli_errors
+@audited
 def lock_status(
     bucket: BucketArg,
     object_name: ObjectArg,
@@ -71,6 +74,7 @@ def lock_status(
 
 @lock_app.command("gaps")
 @cli_errors
+@audited
 def lock_gaps(
     limit: Annotated[int, typer.Option("--limit", help="Max findings to return")] = 50,
     target: TargetOption = None,

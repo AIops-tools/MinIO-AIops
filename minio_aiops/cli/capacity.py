@@ -9,6 +9,7 @@ import typer
 
 from minio_aiops.cli._common import (
     TargetOption,
+    audited,
     cli_errors,
     console,
     get_connection,
@@ -24,6 +25,7 @@ capacity_app = typer.Typer(
 
 @capacity_app.command("rca")
 @cli_errors
+@audited
 def capacity_rca(target: TargetOption = None) -> None:
     """Capacity & usage RCA: cause + suggested action per finding."""
     from minio_aiops.ops import capacity as ops
@@ -34,6 +36,7 @@ def capacity_rca(target: TargetOption = None) -> None:
 
 @capacity_app.command("usage")
 @cli_errors
+@audited
 def capacity_usage(
     limit: Annotated[int, typer.Option("--limit", help="Max rows")] = 25,
     target: TargetOption = None,

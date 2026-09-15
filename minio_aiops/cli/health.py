@@ -6,7 +6,7 @@ import json
 
 import typer
 
-from minio_aiops.cli._common import TargetOption, cli_errors, console, get_connection
+from minio_aiops.cli._common import TargetOption, audited, cli_errors, console, get_connection
 
 health_app = typer.Typer(
     name="health",
@@ -17,6 +17,7 @@ health_app = typer.Typer(
 
 @health_app.command("check")
 @cli_errors
+@audited
 def health_check(target: TargetOption = None) -> None:
     """Liveness + readiness + cluster write-quorum health in one shot."""
     from minio_aiops.ops import health as ops
@@ -27,6 +28,7 @@ def health_check(target: TargetOption = None) -> None:
 
 @health_app.command("status")
 @cli_errors
+@audited
 def health_status(target: TargetOption = None) -> None:
     """Dashboard-header summary: nodes, drives, capacity, buckets, objects."""
     from minio_aiops.ops import health as ops
