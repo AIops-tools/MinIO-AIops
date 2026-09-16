@@ -1,5 +1,8 @@
 # Release notes — minio-aiops 0.5.0
 
+> Historical — this file covers the 0.5.0 release only and is not updated.
+> For every release since, see [CHANGELOG.md](CHANGELOG.md) and the GitHub releases.
+
 Previous release: 0.4.0.
 
 ## BREAKING — the authorization layer is removed
