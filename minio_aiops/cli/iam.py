@@ -1,7 +1,7 @@
 """``minio-aiops iam`` — IAM reads + guarded user writes.
 
 Real writes are delegated to the ``@governed_tool``-wrapped twins in
-``mcp_server.tools.iam`` so CLI writes are audited and undo-recorded on the SAME
+``minio_aiops.mcp_server.tools.iam`` so CLI writes are audited and undo-recorded on the SAME
 governance path as the MCP tools.
 
 The secret for ``user-create`` is read from an environment variable, never a
@@ -128,7 +128,7 @@ def iam_user_create(
     the shell history of whoever ran it. The secret is redacted in the audit row
     and is never printed back.
     """
-    from mcp_server.tools import iam as gov
+    from minio_aiops.mcp_server.tools import iam as gov
 
     secret = os.environ.get(SECRET_ENV, "")
     if not secret:
@@ -159,7 +159,7 @@ def iam_user_status(
     dry_run: DryRunOption = False,
 ) -> None:
     """Enable or disable an IAM user (reversible; refused for our own key)."""
-    from mcp_server.tools import iam as gov
+    from minio_aiops.mcp_server.tools import iam as gov
 
     normalized = str(state).strip().lower()
     if normalized not in ("enable", "disable"):
@@ -187,7 +187,7 @@ def iam_user_remove(
     dry_run: DryRunOption = False,
 ) -> None:
     """Delete an IAM user — IRREVERSIBLE (dry-run + double confirm)."""
-    from mcp_server.tools import iam as gov
+    from minio_aiops.mcp_server.tools import iam as gov
 
     if dry_run:
         dry_run_preview(
@@ -214,7 +214,7 @@ def iam_policy_attach(
     dry_run: DryRunOption = False,
 ) -> None:
     """Attach canned policies to a user (reversible; refused for our own key)."""
-    from mcp_server.tools import iam as gov
+    from minio_aiops.mcp_server.tools import iam as gov
 
     if dry_run:
         dry_run_preview(
@@ -238,7 +238,7 @@ def iam_policy_detach(
     dry_run: DryRunOption = False,
 ) -> None:
     """Detach canned policies from a user (reversible; refused for our own key)."""
-    from mcp_server.tools import iam as gov
+    from minio_aiops.mcp_server.tools import iam as gov
 
     if dry_run:
         dry_run_preview(

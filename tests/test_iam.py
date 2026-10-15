@@ -101,7 +101,7 @@ def test_create_user_is_declared_sensitive_so_the_audit_row_redacts_it():
     """The harness redacts declared sensitive params in the audit row and in the
     undo record's orig_params; results are stored verbatim, which is why the
     result carries no secret either."""
-    from mcp_server.tools import iam as gov
+    from minio_aiops.mcp_server.tools import iam as gov
 
     assert "secret_key" in getattr(gov.create_user, "_sensitive_params", [])
 
@@ -136,7 +136,7 @@ def test_recreating_an_existing_user_says_the_secret_was_replaced():
 def test_no_undo_is_recorded_when_create_user_replaced_a_secret(monkeypatch, recorded):
     """Removing the account would destroy the credential rather than restore the
     prior one, and no descriptor can put the old secret back."""
-    from mcp_server.tools import iam as gov
+    from minio_aiops.mcp_server.tools import iam as gov
 
     conn = _conn()
     monkeypatch.setattr(gov, "_get_connection", lambda target=None: conn)
@@ -283,7 +283,7 @@ def recorded(monkeypatch):
 
 
 def _gov_conn(monkeypatch) -> MagicMock:
-    from mcp_server.tools import iam as gov
+    from minio_aiops.mcp_server.tools import iam as gov
 
     conn = _conn()
     monkeypatch.setattr(gov, "_get_connection", lambda target=None: conn)
@@ -291,7 +291,7 @@ def _gov_conn(monkeypatch) -> MagicMock:
 
 
 def test_status_undo_restores_prior_and_replays(monkeypatch, recorded):
-    from mcp_server.tools import iam as gov
+    from minio_aiops.mcp_server.tools import iam as gov
 
     conn = _gov_conn(monkeypatch)
     conn.user_info.return_value = {"status": "enabled"}
@@ -307,7 +307,7 @@ def test_status_undo_restores_prior_and_replays(monkeypatch, recorded):
 
 
 def test_policy_undo_detaches_only_what_was_attached(monkeypatch, recorded):
-    from mcp_server.tools import iam as gov
+    from minio_aiops.mcp_server.tools import iam as gov
 
     conn = _gov_conn(monkeypatch)
     conn.user_info.return_value = {"policyName": "readonly"}
@@ -324,7 +324,7 @@ def test_policy_undo_detaches_only_what_was_attached(monkeypatch, recorded):
 
 
 def test_detach_undo_reattaches_and_replays(monkeypatch, recorded):
-    from mcp_server.tools import iam as gov
+    from minio_aiops.mcp_server.tools import iam as gov
 
     conn = _gov_conn(monkeypatch)
     conn.user_info.return_value = {"policyName": "readonly,readwrite"}
@@ -338,7 +338,7 @@ def test_detach_undo_reattaches_and_replays(monkeypatch, recorded):
 
 
 def test_create_user_undo_removes_a_genuinely_new_account(monkeypatch, recorded):
-    from mcp_server.tools import iam as gov
+    from minio_aiops.mcp_server.tools import iam as gov
 
     conn = _gov_conn(monkeypatch)
     conn.user_info.side_effect = MinioApiError("no such user", status_code=404)
@@ -358,7 +358,7 @@ def test_create_user_undo_removes_a_genuinely_new_account(monkeypatch, recorded)
 
 
 def test_dry_run_reports_a_self_targeting_refusal(monkeypatch):
-    from mcp_server.tools import iam as gov
+    from minio_aiops.mcp_server.tools import iam as gov
 
     conn = _gov_conn(monkeypatch)
     for call in (
@@ -376,7 +376,7 @@ def test_dry_run_reports_a_self_targeting_refusal(monkeypatch):
 
 
 def test_dry_run_on_another_user_previews_without_writing(monkeypatch):
-    from mcp_server.tools import iam as gov
+    from minio_aiops.mcp_server.tools import iam as gov
 
     conn = _gov_conn(monkeypatch)
     result = gov.set_user_status(access_key="alice", enabled=False, dry_run=True)
@@ -401,7 +401,7 @@ def test_a_failed_existence_probe_suppresses_the_undo_rather_than_deleting():
 
 
 def test_no_undo_descriptor_when_the_probe_could_not_tell(monkeypatch, recorded):
-    from mcp_server.tools import iam as gov
+    from minio_aiops.mcp_server.tools import iam as gov
 
     conn = _gov_conn(monkeypatch)
     conn.user_info.side_effect = MinioApiError("connection reset", status_code=None)

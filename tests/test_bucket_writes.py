@@ -161,7 +161,7 @@ def recorded(monkeypatch):
 
 
 def _gov_conn(monkeypatch) -> MagicMock:
-    from mcp_server.tools import bucket_writes as gov
+    from minio_aiops.mcp_server.tools import bucket_writes as gov
 
     conn = MagicMock(name="conn")
     monkeypatch.setattr(gov, "_get_connection", lambda target=None: conn)
@@ -170,7 +170,7 @@ def _gov_conn(monkeypatch) -> MagicMock:
 
 def _replay(descriptor: dict, monkeypatch) -> MagicMock:
     """Call the descriptor's target tool with its params — signature must fit."""
-    from mcp_server.tools import bucket_writes as gov
+    from minio_aiops.mcp_server.tools import bucket_writes as gov
 
     conn = _gov_conn(monkeypatch)
     conn.get_bucket_policy.return_value = None
@@ -183,7 +183,7 @@ def _replay(descriptor: dict, monkeypatch) -> MagicMock:
 
 
 def test_set_bucket_policy_undo_restores_prior_and_replays(monkeypatch, recorded):
-    from mcp_server.tools import bucket_writes as gov
+    from minio_aiops.mcp_server.tools import bucket_writes as gov
 
     conn = _gov_conn(monkeypatch)
     conn.get_bucket_policy.return_value = PRIOR_POLICY
@@ -197,7 +197,7 @@ def test_set_bucket_policy_undo_restores_prior_and_replays(monkeypatch, recorded
 
 
 def test_set_bucket_policy_undo_is_delete_when_no_prior(monkeypatch, recorded):
-    from mcp_server.tools import bucket_writes as gov
+    from minio_aiops.mcp_server.tools import bucket_writes as gov
 
     conn = _gov_conn(monkeypatch)
     conn.get_bucket_policy.return_value = None
@@ -209,7 +209,7 @@ def test_set_bucket_policy_undo_is_delete_when_no_prior(monkeypatch, recorded):
 
 
 def test_set_lifecycle_undo_restores_prior_xml_and_replays(monkeypatch, recorded):
-    from mcp_server.tools import bucket_writes as gov
+    from minio_aiops.mcp_server.tools import bucket_writes as gov
 
     conn = _gov_conn(monkeypatch)
     conn.get_bucket_lifecycle_xml.return_value = PRIOR_LC_XML
@@ -222,7 +222,7 @@ def test_set_lifecycle_undo_restores_prior_xml_and_replays(monkeypatch, recorded
 
 
 def test_delete_lifecycle_undo_reapplies_prior_and_replays(monkeypatch, recorded):
-    from mcp_server.tools import bucket_writes as gov
+    from minio_aiops.mcp_server.tools import bucket_writes as gov
 
     conn = _gov_conn(monkeypatch)
     conn.get_bucket_lifecycle_xml.return_value = PRIOR_LC_XML
@@ -233,7 +233,7 @@ def test_delete_lifecycle_undo_reapplies_prior_and_replays(monkeypatch, recorded
 
 
 def test_versioning_undo_off_prior_becomes_suspended(monkeypatch, recorded):
-    from mcp_server.tools import bucket_writes as gov
+    from minio_aiops.mcp_server.tools import bucket_writes as gov
 
     conn = _gov_conn(monkeypatch)
     conn.get_bucket_versioning.return_value = "Off"
@@ -246,7 +246,7 @@ def test_versioning_undo_off_prior_becomes_suspended(monkeypatch, recorded):
 
 
 def test_quota_undo_restores_prior_and_replays(monkeypatch, recorded):
-    from mcp_server.tools import bucket_writes as gov
+    from minio_aiops.mcp_server.tools import bucket_writes as gov
 
     conn = _gov_conn(monkeypatch)
     conn.get_bucket_quota.return_value = {"quotaBytes": 5000}
@@ -285,7 +285,7 @@ def test_all_write_dry_runs_make_no_mutating_client_calls(monkeypatch):
     forbidden, and that half is asserted harder than before — by name, against
     the full list of state-changing client methods.
     """
-    from mcp_server.tools import bucket_writes as gov
+    from minio_aiops.mcp_server.tools import bucket_writes as gov
 
     conn = _gov_conn(monkeypatch)
     conn.is_bucket_empty.return_value = True

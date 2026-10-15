@@ -370,7 +370,7 @@ def recorded(monkeypatch):
 
 
 def _gov_conn(monkeypatch) -> MagicMock:
-    from mcp_server.tools import objectlock as gov
+    from minio_aiops.mcp_server.tools import objectlock as gov
 
     conn = MagicMock(name="conn")
     monkeypatch.setattr(gov, "_get_connection", lambda target=None: conn)
@@ -380,7 +380,7 @@ def _gov_conn(monkeypatch) -> MagicMock:
 def test_object_retention_records_no_undo_descriptor(monkeypatch, recorded):
     """An undo token here would be one whose replay is guaranteed to fail while
     the audit row claims the write was reversible — bug class #6."""
-    from mcp_server.tools import objectlock as gov
+    from minio_aiops.mcp_server.tools import objectlock as gov
 
     conn = _gov_conn(monkeypatch)
     conn.get_object_lock_config.return_value = LOCK_NO_DEFAULT
@@ -394,7 +394,7 @@ def test_object_retention_records_no_undo_descriptor(monkeypatch, recorded):
 
 
 def test_legal_hold_undo_restores_prior_state_and_replays(monkeypatch, recorded):
-    from mcp_server.tools import objectlock as gov
+    from minio_aiops.mcp_server.tools import objectlock as gov
 
     conn = _gov_conn(monkeypatch)
     conn.get_object_lock_config.return_value = LOCK_NO_DEFAULT
@@ -415,7 +415,7 @@ def test_legal_hold_undo_restores_prior_state_and_replays(monkeypatch, recorded)
 
 
 def test_default_retention_undo_restores_prior_rule_and_replays(monkeypatch, recorded):
-    from mcp_server.tools import objectlock as gov
+    from minio_aiops.mcp_server.tools import objectlock as gov
 
     conn = _gov_conn(monkeypatch)
     conn.get_object_lock_config.return_value = LOCK_GOV_30
@@ -435,7 +435,7 @@ def test_default_retention_undo_restores_prior_rule_and_replays(monkeypatch, rec
 
 
 def test_default_retention_undo_clears_when_there_was_no_prior_rule(monkeypatch, recorded):
-    from mcp_server.tools import objectlock as gov
+    from minio_aiops.mcp_server.tools import objectlock as gov
 
     conn = _gov_conn(monkeypatch)
     conn.get_object_lock_config.return_value = LOCK_NO_DEFAULT
@@ -444,7 +444,7 @@ def test_default_retention_undo_clears_when_there_was_no_prior_rule(monkeypatch,
 
 
 def test_create_bucket_undo_is_the_delete(monkeypatch, recorded):
-    from mcp_server.tools import objectlock as gov
+    from minio_aiops.mcp_server.tools import objectlock as gov
 
     conn = _gov_conn(monkeypatch)
     conn.get_object_lock_config.return_value = LOCK_NO_DEFAULT
@@ -457,7 +457,7 @@ def test_create_bucket_undo_is_the_delete(monkeypatch, recorded):
     # Replayed for real. This is the one descriptor pointing at a tool in ANOTHER
     # module (bucket_writes), which is exactly where a signature mismatch hides
     # until an incident.
-    from mcp_server.tools import bucket_writes as other
+    from minio_aiops.mcp_server.tools import bucket_writes as other
 
     replay_conn = MagicMock(name="conn")
     monkeypatch.setattr(other, "_get_connection", lambda target=None: replay_conn)
@@ -472,7 +472,7 @@ def test_create_bucket_undo_is_the_delete(monkeypatch, recorded):
 def test_create_bucket_undo_is_refused_once_the_bucket_holds_data(monkeypatch, recorded):
     """The undo is honest about its own limit: "delete while empty" is a promise
     the delete tool enforces, not a note in a docstring."""
-    from mcp_server.tools import bucket_writes as other
+    from minio_aiops.mcp_server.tools import bucket_writes as other
 
     replay_conn = MagicMock(name="conn")
     monkeypatch.setattr(other, "_get_connection", lambda target=None: replay_conn)
@@ -488,7 +488,7 @@ def test_create_bucket_undo_is_refused_once_the_bucket_holds_data(monkeypatch, r
 def test_dry_run_refuses_what_the_real_call_would_refuse(monkeypatch):
     """bug class #10: dry_run may read, and here it must — 'would this be
     refused?' is the only question worth asking before an irreversible write."""
-    from mcp_server.tools import objectlock as gov
+    from minio_aiops.mcp_server.tools import objectlock as gov
 
     conn = _gov_conn(monkeypatch)
     conn.get_object_lock_config.return_value = None
@@ -519,7 +519,7 @@ def test_dry_run_refuses_what_the_real_call_would_refuse(monkeypatch):
 
 
 def test_dry_run_default_retention_reports_the_refusal_too(monkeypatch):
-    from mcp_server.tools import objectlock as gov
+    from minio_aiops.mcp_server.tools import objectlock as gov
 
     conn = _gov_conn(monkeypatch)
     conn.get_object_lock_config.return_value = None

@@ -28,7 +28,7 @@ import typer
 from minio_aiops.cli._common import checked
 
 CLI_DIR = pathlib.Path(__file__).resolve().parents[1] / "minio_aiops" / "cli"
-TOOLS_DIR = pathlib.Path(__file__).resolve().parents[1] / "mcp_server" / "tools"
+TOOLS_DIR = pathlib.Path(__file__).resolve().parents[1] / "minio_aiops" / "mcp_server" / "tools"
 
 #: Helpers that end the command non-zero when the payload reports a failure.
 CHECKERS = ['checked', 'dry_run_preview']

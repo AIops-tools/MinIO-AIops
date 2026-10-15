@@ -16,7 +16,7 @@ from unittest.mock import MagicMock
 import pytest
 from typer.testing import CliRunner
 
-# Kept in sync with mcp_server/server.py (the full registered tool surface).
+# Kept in sync with minio_aiops/mcp_server/server.py (the full registered tool surface).
 EXPECTED_TOOLS = {
     # health
     "health_live", "health_ready", "health_cluster", "cluster_status", "fleet_overview",
@@ -48,8 +48,8 @@ def test_all_modules_import():
         "minio_aiops.cli.init", "minio_aiops.cli.secret", "minio_aiops.cli.health",
         "minio_aiops.cli.bucket", "minio_aiops.cli.capacity", "minio_aiops.cli.heal",
         "minio_aiops.cli.overview", "minio_aiops.cli.doctor",
-        "mcp_server.server", "mcp_server._shared",
-        "mcp_server.tools.health", "mcp_server.tools.bucket_writes",
+        "minio_aiops.mcp_server.server", "minio_aiops.mcp_server._shared",
+        "minio_aiops.mcp_server.tools.health", "minio_aiops.mcp_server.tools.bucket_writes",
     ):
         importlib.import_module(name)
 
@@ -107,7 +107,7 @@ def test_cli_leaf_help_triggers_lazy_imports():
 
 @pytest.mark.unit
 def test_mcp_list_tools_exposes_expected_tools():
-    from mcp_server.server import mcp
+    from minio_aiops.mcp_server.server import mcp
 
     tools = asyncio.run(mcp.list_tools())
     names = {t.name for t in tools}
@@ -116,7 +116,7 @@ def test_mcp_list_tools_exposes_expected_tools():
 
 @pytest.mark.unit
 def test_every_mcp_tool_is_governed_by_harness():
-    from mcp_server import _shared
+    from minio_aiops.mcp_server import _shared
 
     tool_objs = _shared.mcp._tool_manager._tools
     assert EXPECTED_TOOLS <= set(tool_objs), "tool registry incomplete"
@@ -128,7 +128,7 @@ def test_every_mcp_tool_is_governed_by_harness():
 
 @pytest.mark.unit
 def test_write_tools_have_correct_risk_tiers():
-    from mcp_server.tools import bucket_writes as w
+    from minio_aiops.mcp_server.tools import bucket_writes as w
 
     assert w.bucket_delete._risk_level == "high"
     for medium in (w.set_bucket_policy, w.delete_bucket_policy, w.set_versioning,
@@ -278,7 +278,7 @@ def test_capacity_rca_resilient_to_failure():
 @pytest.mark.unit
 def test_set_versioning_captures_prior_and_records_undo(monkeypatch):
     import minio_aiops.governance.undo as undo_mod
-    from mcp_server.tools import bucket_writes as w
+    from minio_aiops.mcp_server.tools import bucket_writes as w
 
     conn = MagicMock(name="conn")
     conn.get_bucket_versioning.return_value = "Suspended"
@@ -309,7 +309,7 @@ def test_bucket_delete_dry_run_checks_emptiness_but_does_not_mutate(monkeypatch)
     a delete. It used to skip the check and return a green "wouldDelete" with a
     note promising execution would re-check — the preview declining to answer.
     """
-    from mcp_server.tools import bucket_writes as w
+    from minio_aiops.mcp_server.tools import bucket_writes as w
 
     conn = MagicMock(name="conn")
     conn.is_bucket_empty.return_value = True
@@ -324,7 +324,7 @@ def test_bucket_delete_dry_run_checks_emptiness_but_does_not_mutate(monkeypatch)
 @pytest.mark.unit
 def test_bucket_delete_dry_run_refuses_a_bucket_that_still_holds_data(monkeypatch):
     """The refusal reaches the preview, so it can never show green then fail."""
-    from mcp_server.tools import bucket_writes as w
+    from minio_aiops.mcp_server.tools import bucket_writes as w
 
     conn = MagicMock(name="conn")
     conn.is_bucket_empty.return_value = False
@@ -337,8 +337,8 @@ def test_bucket_delete_dry_run_refuses_a_bucket_that_still_holds_data(monkeypatc
 
 @pytest.mark.unit
 def test_cli_bucket_delete_dry_run_gates(monkeypatch):
-    from mcp_server.tools import bucket_writes as w
     from minio_aiops.cli import app
+    from minio_aiops.mcp_server.tools import bucket_writes as w
 
     conn = MagicMock(name="conn")
     conn.is_bucket_empty.return_value = True
@@ -374,7 +374,7 @@ def test_risk_level_agrees_with_read_write_docstring_tag():
     16 such mislabels line-wide once, so it is kept even though read-only mode
     (its original motivation) is gone.
     """
-    from mcp_server import server
+    from minio_aiops.mcp_server import server
 
     untagged, mismatched = [], []
     for name, tool in server.mcp._tool_manager._tools.items():

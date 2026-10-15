@@ -12,8 +12,8 @@ refusal instead of a green banner.
 
 from typing import Any, Optional
 
-from mcp_server._shared import _get_connection, mcp, tool_errors
 from minio_aiops.governance import governed_tool
+from minio_aiops.mcp_server._shared import _get_connection, mcp, tool_errors
 from minio_aiops.ops import iam as ops
 from minio_aiops.ops import iam_writes as writes
 

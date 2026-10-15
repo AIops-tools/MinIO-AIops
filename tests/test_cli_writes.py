@@ -1,7 +1,7 @@
 """CLI confirmed-write path — past dry-run, through governance, onto disk.
 
 The CLI write commands delegate real execution to the ``@governed_tool``
-functions in ``mcp_server.tools``. These tests drive a write command PAST the
+functions in ``minio_aiops.mcp_server.tools``. These tests drive a write command PAST the
 dry-run branch and the double-confirm prompts and assert the call really went
 through the governed path (audit row on disk) — the regression test for the
 "CLI writes were unaudited" line-wide fix.
@@ -50,7 +50,7 @@ def _now_iso() -> str:
 
 def _mock_conn(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
     """Mock the governed module's connection with one empty, deletable bucket."""
-    import mcp_server.tools.bucket_writes as gov
+    import minio_aiops.mcp_server.tools.bucket_writes as gov
 
     conn = MagicMock(name="conn")
     conn.is_bucket_empty.return_value = True

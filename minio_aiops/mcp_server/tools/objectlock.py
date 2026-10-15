@@ -11,8 +11,8 @@ preview of a call that would be refused reports the refusal.
 
 from typing import Any, Optional
 
-from mcp_server._shared import _get_connection, mcp, tool_errors
 from minio_aiops.governance import governed_tool
+from minio_aiops.mcp_server._shared import _get_connection, mcp, tool_errors
 from minio_aiops.ops import lock_writes as writes
 from minio_aiops.ops import objectlock as ops
 

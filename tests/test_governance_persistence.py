@@ -128,7 +128,7 @@ def test_real_write_tool_persists_priorstate_undo(gov_home, monkeypatch):
     conn = MagicMock(name="conn")
     conn.get_bucket_versioning.return_value = "Suspended"
 
-    from mcp_server.tools import bucket_writes as gov
+    from minio_aiops.mcp_server.tools import bucket_writes as gov
 
     monkeypatch.setattr(gov, "_get_connection", lambda target=None: conn)
     result = gov.set_versioning(bucket_name="data-bkt", status="Enabled")

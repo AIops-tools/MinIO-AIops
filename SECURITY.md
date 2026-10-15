@@ -74,7 +74,7 @@ scripts or background services.
 ## Static Analysis
 
 ```bash
-uvx bandit -r minio_aiops/ mcp_server/
+uvx bandit -r minio_aiops/
 uv run ruff check .
 ```
 

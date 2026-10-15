@@ -1,7 +1,7 @@
 """``minio-aiops bucket`` — bucket reads + guarded writes.
 
 Real writes are delegated to the ``@governed_tool``-wrapped functions in
-``mcp_server.tools.bucket_writes`` so that CLI writes are audited +
+``minio_aiops.mcp_server.tools.bucket_writes`` so that CLI writes are audited +
 undo-recorded on the SAME governance path as the MCP tools (the CLI keeps its
 own dry-run preview and human double-confirm on top).
 """
@@ -145,7 +145,7 @@ def bucket_versioning_set(
     dry_run: DryRunOption = False,
 ) -> None:
     """Enable/suspend bucket versioning (reversible; prior state captured)."""
-    from mcp_server.tools import bucket_writes as gov
+    from minio_aiops.mcp_server.tools import bucket_writes as gov
 
     if dry_run:
         dry_run_preview(
@@ -170,7 +170,7 @@ def bucket_policy_set(
     """Replace the bucket policy from a JSON file (reversible; prior captured)."""
     from pathlib import Path
 
-    from mcp_server.tools import bucket_writes as gov
+    from minio_aiops.mcp_server.tools import bucket_writes as gov
 
     policy_json = Path(policy_file).read_text("utf-8")
     if dry_run:
@@ -203,7 +203,7 @@ def bucket_lifecycle_set(
     dry_run: DryRunOption = False,
 ) -> None:
     """Replace the bucket lifecycle rules (reversible; prior config captured)."""
-    from mcp_server.tools import bucket_writes as gov
+    from minio_aiops.mcp_server.tools import bucket_writes as gov
 
     if dry_run:
         preview = gov.set_lifecycle(
@@ -229,7 +229,7 @@ def bucket_quota_set(
     dry_run: DryRunOption = False,
 ) -> None:
     """Set (>0) or clear (0) the bucket hard quota (reversible; prior captured)."""
-    from mcp_server.tools import bucket_writes as gov
+    from minio_aiops.mcp_server.tools import bucket_writes as gov
 
     if dry_run:
         dry_run_preview(
@@ -254,7 +254,7 @@ def bucket_purge_uploads(
     dry_run: DryRunOption = False,
 ) -> None:
     """Abort abandoned multipart uploads — irreversible (dry-run + double confirm)."""
-    from mcp_server.tools import bucket_writes as gov
+    from minio_aiops.mcp_server.tools import bucket_writes as gov
 
     if dry_run:
         # The preview carries the real candidate count ("matched 3 of 12"), which
@@ -280,7 +280,7 @@ def bucket_delete(
     dry_run: DryRunOption = False,
 ) -> None:
     """Delete an EMPTY bucket — irreversible (dry-run + double confirm)."""
-    from mcp_server.tools import bucket_writes as gov
+    from minio_aiops.mcp_server.tools import bucket_writes as gov
 
     if dry_run:
         # Through the governed twin, which runs the emptiness check: a preview

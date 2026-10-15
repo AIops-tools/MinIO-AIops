@@ -1,7 +1,7 @@
 """``minio-aiops lock`` — object lock (WORM) reads + guarded writes.
 
 Every real write is delegated to the ``@governed_tool``-wrapped twin in
-``mcp_server.tools.objectlock`` so CLI writes are audited and undo-recorded on
+``minio_aiops.mcp_server.tools.objectlock`` so CLI writes are audited and undo-recorded on
 the SAME governance path as the MCP tools. ``retention-set`` additionally
 carries a double confirm and prints its irreversibility before asking, because
 it is the one write in this tool that no credential can walk back.
@@ -102,7 +102,7 @@ def lock_bucket_create(
     dry_run: DryRunOption = False,
 ) -> None:
     """Create a bucket, optionally WORM-capable (reversible while it stays empty)."""
-    from mcp_server.tools import objectlock as gov
+    from minio_aiops.mcp_server.tools import objectlock as gov
 
     if dry_run:
         dry_run_preview(
@@ -126,7 +126,7 @@ def lock_default_set(
     dry_run: DryRunOption = False,
 ) -> None:
     """Set the bucket DEFAULT retention (reversible; applies to future uploads)."""
-    from mcp_server.tools import objectlock as gov
+    from minio_aiops.mcp_server.tools import objectlock as gov
 
     if dry_run:
         # Through the governed twin, which refuses a bucket without object lock:
@@ -157,7 +157,7 @@ def lock_default_clear(
     dry_run: DryRunOption = False,
 ) -> None:
     """Remove the DEFAULT retention rule (object lock stays enabled; reversible)."""
-    from mcp_server.tools import objectlock as gov
+    from minio_aiops.mcp_server.tools import objectlock as gov
 
     if dry_run:
         dry_run_preview(
@@ -188,7 +188,7 @@ def lock_retention_set(
     dry_run: DryRunOption = False,
 ) -> None:
     """Put retention on one object version — IRREVERSIBLE (dry-run + double confirm)."""
-    from mcp_server.tools import objectlock as gov
+    from minio_aiops.mcp_server.tools import objectlock as gov
 
     if dry_run:
         # Through the governed twin so every guard (no object lock, weakening,
@@ -248,7 +248,7 @@ def lock_legal_hold(
     dry_run: DryRunOption = False,
 ) -> None:
     """Place or lift a legal hold on one object version (reversible by design)."""
-    from mcp_server.tools import objectlock as gov
+    from minio_aiops.mcp_server.tools import objectlock as gov
 
     normalized = str(state).strip().lower()
     if normalized not in ("on", "off"):

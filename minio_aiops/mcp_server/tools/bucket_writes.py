@@ -9,8 +9,8 @@ purge — record ``priorState`` only, because there is honestly no undo.
 
 from typing import Any, Optional
 
-from mcp_server._shared import _get_connection, mcp, tool_errors
 from minio_aiops.governance import governed_tool
+from minio_aiops.mcp_server._shared import _get_connection, mcp, tool_errors
 from minio_aiops.ops import bucket_writes as ops
 
 
