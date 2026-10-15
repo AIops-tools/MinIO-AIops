@@ -20,7 +20,7 @@
 |------|---------|---------|
 | `capacity_rca` | metrics endpoint | findings with **cause + suggestedAction**: CLUSTER_FULL / CLUSTER_NEARFULL / DRIVES_OFFLINE / NODES_OFFLINE / DRIVE_HOTSPOT / DRIVE_IMBALANCE; per-drive usage table |
 | `usage_by_bucket` | metrics endpoint | envelope `{buckets, returned, limit, truncated}` — per-bucket bytes + objects, biggest first |
-| `healing_health` | metrics endpoint | per-erasure-set online drives / write quorum / **failureToleranceRemaining**, healing drives, heal backlog + errors; findings WRITE_QUORUM_LOST / _AT_EDGE / LOW_FAILURE_TOLERANCE / HEALING_IN_PROGRESS / HEAL_ERRORS |
+| `healing_health` | metrics endpoint | per-erasure-set online drives / write quorum / **failureToleranceRemaining**, healing drives, heal backlog + errors; findings WRITE_QUORUM_LOST / _AT_EDGE / LOW_FAILURE_TOLERANCE / HEALING_IN_PROGRESS / HEAL_ERRORS / HEALING_STATUS_UNKNOWN / ERASURE_SETS_UNREAD; an unscraped gauge is `null` (and `healthy: null` when no erasure-set data was read), never 0 |
 | `drive_status` | metrics endpoint | per-drive rows (server, drive, used ratio), fullest first |
 | `node_status` | metrics endpoint | nodes online/offline + per-node drive counts |
 | `bucket_exposure_audit` | S3 API per bucket | reports `bucketsAudited`/`bucketsTotal`/`truncated`; **ranked** findings: PUBLIC_WRITE_POLICY / PUBLIC_READ_POLICY / NO_DEFAULT_ENCRYPTION / VERSIONING_OFF / NO_LIFECYCLE with riskScore + riskLevel |

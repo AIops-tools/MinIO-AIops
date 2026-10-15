@@ -72,8 +72,9 @@ def capacity_rca(conn: Any) -> dict:
         else None
     )
     used_ratio = pct(used, usable_total)
-    drives_offline = sum_values(metrics, h.M_DRIVES_OFFLINE) or 0
-    nodes_offline = sum_values(metrics, h.M_NODES_OFFLINE) or 0
+    # Absent from the scrape = not measured (None), never a reassuring 0.
+    drives_offline = as_int(sum_values(metrics, h.M_DRIVES_OFFLINE))
+    nodes_offline = as_int(sum_values(metrics, h.M_NODES_OFFLINE))
     drives = _drive_usage(metrics)
 
     findings: list[dict] = []
@@ -171,12 +172,13 @@ def capacity_rca(conn: Any) -> dict:
             )
 
     return {
-        "healthy": not findings,
+        # None = capacity not measured: no findings is not the same as healthy.
+        "healthy": None if used_ratio is None else not findings,
         "usableTotalBytes": as_int(usable_total),
         "usableUsedBytes": as_int(used),
         "usedRatio": used_ratio,
-        "drivesOffline": int(drives_offline),
-        "nodesOffline": int(nodes_offline),
+        "drivesOffline": drives_offline,
+        "nodesOffline": nodes_offline,
         "drives": drives[:DRIVE_ROWS_SHOWN],
         "drivesReturned": min(len(drives), DRIVE_ROWS_SHOWN),
         "drivesTotal": len(drives),

@@ -61,7 +61,8 @@ def healing_health(conn: Any) -> dict:
     for key, online_drives in online.items():
         wq = write_q.get(key)
         tolerance = int(online_drives - wq) if isinstance(wq, (int, float)) else None
-        healing_drives = int(healing.get(key, 0))
+        # Absent from the scrape = not measured; never a reassuring 0.
+        healing_drives = int(healing[key]) if key in healing else None
         sets.append(
             {
                 "erasureSet": s(key),
@@ -122,7 +123,21 @@ def healing_health(conn: Any) -> dict:
                     ),
                 }
             )
-        if healing_drives:
+        if healing_drives is None:
+            findings.append(
+                {
+                    "issue": "HEALING_STATUS_UNKNOWN",
+                    "erasureSet": s(key),
+                    "severity": "info",
+                    "cause": f"The healing-drive gauge for erasure set {key} was not in "
+                    f"the metrics scrape, so whether it is healing is unknown.",
+                    "suggestedAction": (
+                        "Check drive_status / `mc admin heal` before maintenance on this "
+                        "set; do not read the missing gauge as 'not healing'."
+                    ),
+                }
+            )
+        elif healing_drives:
             findings.append(
                 {
                     "issue": "HEALING_IN_PROGRESS",
@@ -159,13 +174,32 @@ def healing_health(conn: Any) -> dict:
             }
         )
 
+    if not online:
+        findings.append(
+            {
+                "issue": "ERASURE_SETS_UNREAD",
+                "severity": "warning",
+                "cause": "No erasure-set metrics were in the scrape, so write-quorum "
+                "risk was not measured.",
+                "suggestedAction": (
+                    "Check that the metrics token can read /minio/v2/metrics/cluster and "
+                    "that this MinIO exports the erasure-set gauges."
+                ),
+            }
+        )
+    healthy = (
+        None
+        if not online
+        else not any(f["severity"] in ("critical", "warning") for f in findings)
+    )
     return {
-        "healthy": not any(f["severity"] in ("critical", "warning") for f in findings),
+        # None = not measured: no erasure-set data means no quorum verdict.
+        "healthy": healthy,
         # Counts, not ratios: a gauge parses to float, and "4.0 objects scanned"
         # is the int-as-float class this line has fixed elsewhere. Only appears
         # once a heal has actually run — verified by taking a node offline.
         "clusterHealthStatus": as_int(first_value(metrics, M_HEALTH_STATUS)),
-        "drivesOffline": int(sum_values(metrics, M_DRIVES_OFFLINE) or 0),
+        "drivesOffline": as_int(sum_values(metrics, M_DRIVES_OFFLINE)),
         "healBacklogObjects": as_int(backlog),
         "healObjectsScanned": as_int(scanned),
         "healObjectsHealed": as_int(healed),

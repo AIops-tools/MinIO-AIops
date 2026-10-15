@@ -156,3 +156,34 @@ def test_drive_status_says_it_only_saw_one_server():
     assert out["scope"] == "node"
     assert out["clusterDrivesOnline"] == 4
     assert "4 drives online" in out["note"]
+
+
+def test_unscraped_healing_gauge_is_unknown_not_zero():
+    m = _set_metrics([(0, 0, 4, 0, 2, 2)])
+    m[ops.M_SET_HEALING] = []  # gauge absent from the scrape
+    out = ops.healing_health(_conn(m))
+    (row,) = out["erasureSets"]
+    assert row["healingDrives"] is None
+    assert any(f["issue"] == "HEALING_STATUS_UNKNOWN" for f in out["findings"])
+
+
+def test_measured_zero_healing_stays_zero():
+    out = ops.healing_health(_conn(_set_metrics([(0, 0, 4, 0, 2, 2)])))
+    assert out["erasureSets"][0]["healingDrives"] == 0
+    assert not any(f["issue"] == "HEALING_STATUS_UNKNOWN" for f in out["findings"])
+
+
+def test_unscraped_offline_count_is_null_not_zero():
+    out = ops.healing_health(_conn(_set_metrics([(0, 0, 4, 0, 2, 2)])))
+    assert out["drivesOffline"] is None
+    m = _set_metrics([(0, 0, 4, 0, 2, 2)])
+    m[ops.M_DRIVES_OFFLINE] = [{"labels": {}, "value": 0.0}]
+    assert ops.healing_health(_conn(m))["drivesOffline"] == 0
+
+
+def test_no_erasure_set_data_is_not_healthy():
+    # A metric-name mismatch reads zero sets; that is "not measured", not "fine".
+    out = ops.healing_health(_conn({}))
+    assert out["erasureSets"] == []
+    assert out["healthy"] is None
+    assert any(f["issue"] == "ERASURE_SETS_UNREAD" for f in out["findings"])

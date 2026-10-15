@@ -109,3 +109,18 @@ def test_usage_by_bucket_resilient():
         "limit": 25,
         "truncated": False,
     }
+
+
+def test_unscraped_offline_counts_are_null_not_zero():
+    m = _metrics()
+    del m["minio_cluster_drive_offline_total"], m["minio_cluster_nodes_offline_total"]
+    out = ops.capacity_rca(_conn(m))
+    assert out["drivesOffline"] is None and out["nodesOffline"] is None
+    measured = ops.capacity_rca(_conn(_metrics()))
+    assert measured["drivesOffline"] == 0 and measured["nodesOffline"] == 0
+
+
+def test_unmeasured_capacity_is_not_healthy():
+    out = ops.capacity_rca(_conn({}))
+    assert out["usedRatio"] is None
+    assert out["healthy"] is None

@@ -12,6 +12,19 @@
   level is published in `_meta` under `io.github.AIops-tools/riskLevel`. These
   are hints for the client; audit and undo are unchanged.
 
+### Fixed
+- `healing_health`: missing metrics read as reassuring zeros. A set whose
+  healing gauge was not scraped reported `healingDrives: 0` (not healing); an
+  absent offline-drive metric reported `drivesOffline: 0`; and a scrape with no
+  erasure-set metrics at all (for example a metric-name mismatch) reported
+  `healthy: true` with nothing measured. These are now `null`, with
+  `HEALING_STATUS_UNKNOWN` per set and an `ERASURE_SETS_UNREAD` warning, and
+  `healthy` is `null` when no quorum data was read. Measured zeros still read 0.
+- `capacity_rca`: the same missing-as-zero shape — unscraped offline-drive and
+  offline-node counts read `0`, and a scrape with no capacity metrics reported
+  `healthy: true`. Both counts are now `null` when not measured (matching
+  `healing_health`), and `healthy` is `null` when capacity was not read.
+
 ## v0.12.3 — 2026-09-15
 
 ### Fixed
