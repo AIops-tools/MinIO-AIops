@@ -2,6 +2,8 @@
 
 # MinIO AIops
 
+> **Audit availability:** Real writes require a committed `pending` audit row and stop before contacting the platform if storage is unavailable. Reads and previews may continue with a warning; new audit rows store outcome summaries rather than full responses.
+
 > **Disclaimer**: Community-maintained open-source project. **Not affiliated with, endorsed by, or sponsored by MinIO, Inc. or any storage vendor.** Product and trademark names belong to their owners. MIT licensed.
 
 Governed AI-ops for **MinIO** object storage — for the homelab and small/medium
@@ -205,7 +207,7 @@ migration warning).
 
 Every MCP tool passes through the bundled `@governed_tool` harness:
 
-- **Audit** — every call (params, result, status, duration, risk tier, and any
+- **Audit** — every call (params, outcome summary, status, duration, risk tier, and any
   `MINIO_AUDIT_APPROVED_BY` / `MINIO_AUDIT_RATIONALE` annotations) is logged to
   `~/.minio-aiops/audit.db` (relocatable via `MINIO_AIOPS_HOME`).
 - **Budget / runaway guard** — token and call budgets trip a circuit breaker.
