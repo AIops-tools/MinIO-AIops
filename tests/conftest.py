@@ -6,6 +6,20 @@ import pytest
 
 
 @pytest.fixture(autouse=True)
+def _isolated_governance_home(tmp_path, monkeypatch: pytest.MonkeyPatch):
+    """Keep governed test writes and their audit/undo rows out of the user's home."""
+    from minio_aiops.governance.audit import reset_engine
+    from minio_aiops.governance.undo import reset_undo_store
+
+    monkeypatch.setenv("MINIO_AIOPS_HOME", str(tmp_path))
+    reset_engine()
+    reset_undo_store()
+    yield
+    reset_engine()
+    reset_undo_store()
+
+
+@pytest.fixture(autouse=True)
 def _default_approver(monkeypatch: pytest.MonkeyPatch) -> None:
     """Record a synthetic approver globally. ``MINIO_AUDIT_APPROVED_BY`` is now
     only an optional audit annotation — written onto the audit row when set,

@@ -12,7 +12,9 @@ import base64
 import hashlib
 import hmac
 import json
+import threading
 from datetime import UTC, datetime
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -519,6 +521,32 @@ def test_health_live_ready_fold_status():
     h.get.assert_called_with("/minio/health/live")
     h.get.return_value = _resp(503)
     assert conn.health_ready()["healthy"] is False
+
+
+def test_loopback_health_ignores_process_proxy(monkeypatch):
+    """A local MinIO health probe must reach MinIO, not the operator's proxy."""
+    class HealthHandler(BaseHTTPRequestHandler):
+        def do_GET(self):  # noqa: N802
+            self.send_response(200)
+            self.end_headers()
+
+        def log_message(self, *_args):
+            pass
+
+    server = HTTPServer(("127.0.0.1", 0), HealthHandler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    monkeypatch.setenv("HTTP_PROXY", "http://127.0.0.1:1")
+    monkeypatch.delenv("NO_PROXY", raising=False)
+    target = mk_target(
+        host="127.0.0.1", port=server.server_port,
+        base_url=f"http://127.0.0.1:{server.server_port}", secure=False,
+    )
+    conn = MinioConnection(target)
+    try:
+        assert conn.health_live() == {"reachable": True, "healthy": True, "statusCode": 200}
+    finally:
+        conn.close()
+        server.shutdown()
 
 
 def test_health_get_network_error_translated():

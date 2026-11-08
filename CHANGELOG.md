@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.15.1 — 2026-11-08
+
+- Bypass system HTTP proxies for loopback MinIO health and metrics requests, matching the S3 client and allowing local verification without changing global proxy settings.
+- Isolate audit and undo state per test so governed write tests pass on hosts where the operator home is not writable.
+
 ## v0.15.0 — 2026-10-30
 
 ### Security and observability (BREAKING)

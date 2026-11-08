@@ -3,6 +3,32 @@
 This document records what has and has not been validated against a real MinIO
 server, so the maturity claim is auditable rather than a vibe.
 
+## Disposable Linux VM rerun (2026-11-08)
+
+On the `Open-test` Ubuntu VM, a disposable MinIO container running
+`RELEASE.2025-09-07T16-13-09Z` was accessed through an SSH tunnel. Its real S3
+API authenticated, health `live`/`ready`/`cluster` returned HTTP 200, the
+metrics endpoint was reachable, and `overview` returned healthy with no probe
+errors. A governed `bucket_create` preview made no change; the real call
+created `aiops-verify-20261108` and recorded an undo token. `bucket_info` read
+the actual bucket, and `undo_apply` deleted it after a preview. A final bucket
+list was empty. The audit recorded the create, read, undo and delete with their
+risk tiers; no credential was placed in the repository.
+
+This run exposed a loopback transport defect: with the host's HTTP proxy
+settings, the S3 SDK authenticated but the separate health/metrics HTTP client
+reported 502. Direct curl and `NO_PROXY` both returned 200. A real loopback
+regression test failed before the fix and passes now; only loopback MinIO
+targets bypass environment proxy discovery. This rerun does not verify a new
+erasure-set fault, IAM permission matrix or multi-node deployment.
+The rebuilt wheel was installed outside the source tree and returned live
+health 200. A separate test-isolation fix keeps audit and undo rows in a
+per-test temporary home: 19 governed write tests had failed in a restricted
+environment when they tried to use the operator's home. A regression now
+checks the real audit row in the temporary database. The full suite passed
+(459 tests) without a pre-set `MINIO_AIOPS_HOME`; Ruff and Bandit reported no
+Medium or High findings, and wheel/sdist build succeeded.
+
 ## Already live-verified ✅ — single-node, and a real 4-drive erasure set (2026-07-19/20)
 
 Two live runs: a single-drive server, then a **4-drive erasure set** (one pool,

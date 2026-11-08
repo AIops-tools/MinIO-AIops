@@ -29,6 +29,7 @@ import hashlib
 import hmac
 import json
 import time
+from ipaddress import ip_address
 from typing import Any
 
 import httpx
@@ -72,6 +73,15 @@ class MinioApiError(Exception):
         self.status_code = status_code
         self.op = op
         super().__init__(message)
+
+
+def _is_loopback_host(host: str) -> bool:
+    if host.lower() == "localhost":
+        return True
+    try:
+        return ip_address(host).is_loopback
+    except ValueError:
+        return False
 
 
 def _teach(exc: Exception, op: str, target: TargetConfig) -> MinioApiError:
@@ -203,6 +213,7 @@ class MinioConnection:
                 base_url=self._target.base_url,
                 verify=self._target.verify_ssl,
                 timeout=_TIMEOUT,
+                trust_env=not _is_loopback_host(self._target.host),
             )
         return self._http
 
